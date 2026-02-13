@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { CarLayout } from '@/components/layout/CarLayout';
 import { useOSStore } from '@/store/use-os-store';
 import { MapPin, Home, Briefcase, Star, Plus, Compass } from 'lucide-react';
-import { getWazeLink, getGoogleMapsLink, isValidCoordinate } from '@/lib/drive-utils';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -10,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { SavedLocation } from '@shared/types';
 const CATEGORY_ICONS = {
   home: Home,
   work: Briefcase,
@@ -20,7 +20,7 @@ export function NavigationHub() {
   const locations = useOSStore((s) => s.locations);
   const fetchLocations = useOSStore((s) => s.fetchLocations);
   const addLocation = useOSStore((s) => s.addLocation);
-  const mapProvider = useOSStore((s) => s.settings.mapProvider);
+  const openMap = useOSStore((s) => s.openMap);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     label: '',
@@ -32,9 +32,8 @@ export function NavigationHub() {
   useEffect(() => {
     fetchLocations();
   }, [fetchLocations]);
-  const handleNavigate = (lat: number, lon: number) => {
-    const link = mapProvider === 'waze' ? getWazeLink(lat, lon) : getGoogleMapsLink(lat, lon);
-    window.location.href = link;
+  const handleNavigate = (loc: SavedLocation) => {
+    openMap(loc);
   };
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,11 +41,13 @@ export function NavigationHub() {
       toast.error('Label is required');
       return;
     }
-    if (!isValidCoordinate(formData.lat, 'lat')) {
+    const lat = parseFloat(formData.lat);
+    const lon = parseFloat(formData.lon);
+    if (isNaN(lat) || lat < -90 || lat > 90) {
       toast.error('Invalid Latitude (-90 to 90)');
       return;
     }
-    if (!isValidCoordinate(formData.lon, 'lon')) {
+    if (isNaN(lon) || lon < -180 || lon > 180) {
       toast.error('Invalid Longitude (-180 to 180)');
       return;
     }
@@ -55,8 +56,8 @@ export function NavigationHub() {
         label: formData.label.trim(),
         address: formData.address.trim() || 'Saved Location',
         category: formData.category,
-        lat: parseFloat(formData.lat),
-        lon: parseFloat(formData.lon),
+        lat,
+        lon,
       });
       toast.success('Location saved');
       setIsDialogOpen(false);
@@ -86,7 +87,7 @@ export function NavigationHub() {
               </DialogHeader>
               <form onSubmit={handleSave} className="space-y-6 pt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="label">Label (e.g. Grandma's House)</Label>
+                  <Label htmlFor="label">Label</Label>
                   <Input
                     id="label"
                     placeholder="Grandma's House"
@@ -146,7 +147,7 @@ export function NavigationHub() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.05 }}
-                  onClick={() => handleNavigate(loc.lat, loc.lon)}
+                  onClick={() => handleNavigate(loc)}
                   className="dashboard-card flex flex-col items-start text-left gap-4 hover:border-primary/50 group"
                 >
                   <div className="p-4 rounded-2xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">

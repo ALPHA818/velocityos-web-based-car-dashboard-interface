@@ -37,7 +37,6 @@
     user-select: none;
     touch-action: manipulation;
   }
-  /* Hide scrollbars for a clean OS look */
   ::-webkit-scrollbar {
     display: none;
   }
@@ -45,6 +44,35 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+}
+/* Leaflet Dark Mode & UI Overrides */
+@import "leaflet/dist/leaflet.css";
+.leaflet-container {
+  background: #09090b !important;
+  width: 100%;
+  height: 100%;
+}
+.leaflet-tile-pane {
+  filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+}
+.leaflet-control-zoom {
+  border: none !important;
+  margin: 2rem !important;
+}
+.leaflet-control-zoom-in, .leaflet-control-zoom-out {
+  background-color: rgba(24, 24, 27, 0.8) !important;
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  width: 64px !important;
+  height: 64px !important;
+  line-height: 64px !important;
+  font-size: 24px !important;
+  border-radius: 16px !important;
+  margin-bottom: 1rem !important;
+  backdrop-filter: blur(8px);
+}
+.leaflet-v-layer {
+  pointer-events: none;
 }
 @layer components {
   .dashboard-card {

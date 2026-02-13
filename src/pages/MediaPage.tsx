@@ -2,7 +2,8 @@ import React from 'react';
 import ReactPlayer from 'react-player';
 import { CarLayout } from '@/components/layout/CarLayout';
 import { useMediaStore, getTrack } from '@/store/use-media-store';
-import { Play, Pause, SkipForward, SkipBack, Volume2 } from 'lucide-react';
+import { useOSStore } from '@/store/use-os-store';
+import { Play, Pause, SkipForward, SkipBack, Volume2, Map as MapIcon } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { motion, AnimatePresence } from 'framer-motion';
 export function MediaPage() {
@@ -17,6 +18,7 @@ export function MediaPage() {
   const setProgress = useMediaStore((s) => s.setProgress);
   const setDuration = useMediaStore((s) => s.setDuration);
   const setVolume = useMediaStore((s) => s.setVolume);
+  const openMap = useOSStore((s) => s.openMap);
   const track = getTrack(currentTrackIndex);
   const handleProgress = (state: { played: number }) => {
     if (isPlaying) setProgress(state.played * 100);
@@ -62,24 +64,32 @@ export function MediaPage() {
           )}
         </div>
         <div className="flex-1 w-full space-y-12">
-          <div className="space-y-2">
-            <motion.h1
-              key={track.title}
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              className="text-6xl font-black tracking-tighter"
+          <div className="flex justify-between items-start">
+            <div className="space-y-2">
+              <motion.h1
+                key={track.title}
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                className="text-6xl font-black tracking-tighter"
+              >
+                {track.title}
+              </motion.h1>
+              <motion.p
+                key={track.artist}
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.1 }}
+                className="text-3xl text-muted-foreground font-medium"
+              >
+                {track.artist}
+              </motion.p>
+            </div>
+            <button 
+              onClick={() => openMap()} 
+              className="touch-target p-4 rounded-3xl bg-white/5 text-muted-foreground hover:text-primary transition-colors"
             >
-              {track.title}
-            </motion.h1>
-            <motion.p
-              key={track.artist}
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className="text-3xl text-muted-foreground font-medium"
-            >
-              {track.artist}
-            </motion.p>
+              <MapIcon className="w-10 h-10" />
+            </button>
           </div>
           <div className="space-y-6">
             <Slider

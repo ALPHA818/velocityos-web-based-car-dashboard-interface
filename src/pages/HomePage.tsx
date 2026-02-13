@@ -7,30 +7,21 @@ import { MiniPlayer } from '@/components/drive/MiniPlayer';
 import { Toaster } from '@/components/ui/sonner';
 import { motion } from 'framer-motion';
 import { useOSStore } from '@/store/use-os-store';
-import { getWazeLink, getGoogleMapsLink } from '@/lib/drive-utils';
 import { ArrowRight } from 'lucide-react';
-import { isValidCoordinate } from '@/lib/drive-utils';
 export function HomePage() {
   const fetchSettings = useOSStore((s) => s.fetchSettings);
   const fetchLocations = useOSStore((s) => s.fetchLocations);
   const locations = useOSStore((s) => s.locations);
-  const settings = useOSStore((s) => s.settings);
+  const openMap = useOSStore((s) => s.openMap);
   useEffect(() => {
     fetchSettings();
     fetchLocations();
   }, [fetchSettings, fetchLocations]);
   const homeLocation = locations.find(l => l.category === 'home');
-  const mapProvider = settings.mapProvider;
   const handleGoHome = () => {
-    if (!homeLocation) return;
-    if (!isValidCoordinate(homeLocation.lat, 'lat') || !isValidCoordinate(homeLocation.lon, 'lon')) { 
-      console.warn('Invalid home location coordinates'); 
-      return; 
+    if (homeLocation) {
+      openMap(homeLocation);
     }
-    const link = mapProvider === 'waze'
-      ? getWazeLink(homeLocation.lat, homeLocation.lon)
-      : getGoogleMapsLink(homeLocation.lat, homeLocation.lon);
-    window.open(link, '_blank');
   };
   return (
     <CarLayout>
