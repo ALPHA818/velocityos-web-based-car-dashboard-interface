@@ -1,0 +1,315 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { api } from '@/lib/api-client';
+import type { UserSettings, SavedLocation } from '@shared/types';
+import { fetchRoute, RouteData, searchPlaces } from '@/lib/nav-utils';
+import { toast } from 'sonner';
+export type GpsStatus = 'prompt' | 'granted' | 'denied' | 'unsupported';
+export type MapPerspective = 'driving' | 'top-down';
+interface OSState {
+  settings: UserSettings;
+  locations: SavedLocation[];
+  recentLocations: SavedLocation[];
+  searchHistory: SavedLocation[];
+  isLoading: boolean;
+  isInitialized: boolean;
+  error: string | null;
+  gpsStatus: GpsStatus;
+  isMapOpen: boolean;
+  isFollowing: boolean;
+  activeDestination: SavedLocation | null;
+  activeRoute: RouteData | null;
+  currentPos: [number, number] | null;
+  currentSpeed: number | null;
+  currentHeading: number | null;
+  trackingId: string | null;
+  isSharingLive: boolean;
+  searchResults: SavedLocation[];
+  isSearching: boolean;
+  selectedDiscoveredPlace: SavedLocation | null;
+  isSearchOverlayOpen: boolean;
+  fetchSettings: () => Promise<void>;
+  updateSettings: (patch: Partial<UserSettings>) => Promise<void>;
+  toggleMapPerspective: () => void;
+  fetchLocations: () => Promise<void>;
+  addLocation: (loc: Omit<SavedLocation, 'id'>) => Promise<void>;
+  removeLocation: (id: string) => Promise<void>;
+  resetSystem: () => Promise<void>;
+  openMap: (dest?: SavedLocation) => void;
+  closeMap: () => void;
+  setFollowing: (following: boolean) => void;
+  setGpsStatus: (status: GpsStatus) => void;
+  setCurrentPos: (pos: [number, number] | null, speed: number | null, heading?: number | null, error?: boolean) => void;
+  calculateRoute: () => Promise<void>;
+  logRecentLocation: (loc: SavedLocation) => Promise<void>;
+  startLiveShare: () => void;
+  stopLiveShare: () => void;
+  fetchRecentLocations: () => Promise<void>;
+  clearHistory: () => Promise<void>;
+  performSearch: (query: string) => Promise<void>;
+  clearSearch: () => void;
+  setSearchOverlay: (open: boolean) => void;
+  selectDiscoveredPlace: (place: SavedLocation | null) => void;
+  fetchSearchHistory: () => Promise<void>;
+  addSearchHistory: (loc: SavedLocation) => Promise<void>;
+  clearSearchHistory: () => Promise<void>;
+}
+export const useOSStore = create<OSState>()(
+  persist(
+    (set, get) => ({
+      settings: {
+        id: 'default',
+        units: 'mph',
+        mapProvider: 'google',
+        mapTheme: 'highway',
+        theme: 'dark',
+        autoTheme: true,
+        mapPerspective: 'top-down',
+      },
+      locations: [],
+      recentLocations: [],
+      searchHistory: [],
+      isLoading: false,
+      isInitialized: false,
+      error: null,
+      gpsStatus: 'prompt',
+      isMapOpen: false,
+      isFollowing: true,
+      activeDestination: null,
+      activeRoute: null,
+      currentPos: null,
+      currentSpeed: null,
+      currentHeading: null,
+      trackingId: null,
+      isSharingLive: false,
+      searchResults: [],
+      isSearching: false,
+      selectedDiscoveredPlace: null,
+      isSearchOverlayOpen: false,
+      fetchSettings: async () => {
+        if (get().isInitialized) return;
+        set({ isLoading: true });
+        try {
+          const data = await api<UserSettings>('/api/settings');
+          set({ settings: data, isLoading: false, isInitialized: true });
+        } catch (err: any) {
+          set({ error: err.message, isLoading: false });
+        }
+      },
+      updateSettings: async (patch) => {
+        const current = get().settings;
+        const optimistic = { ...current, ...patch };
+        set({ settings: optimistic });
+        try {
+          const data = await api<UserSettings>('/api/settings', {
+            method: 'POST',
+            body: JSON.stringify(patch),
+          });
+          set({ settings: data });
+        } catch (err: any) {
+          set({ error: err.message, settings: current });
+        }
+      },
+      toggleMapPerspective: () => {
+        const current = get().settings.mapPerspective;
+        get().updateSettings({ mapPerspective: current === 'driving' ? 'top-down' : 'driving' });
+      },
+      fetchLocations: async () => {
+        try {
+          const res = await api<{ items: SavedLocation[] }>('/api/locations');
+          set({ locations: res.items });
+        } catch (err: any) {
+          set({ error: err.message });
+        }
+      },
+      addLocation: async (loc) => {
+        try {
+          const newLoc = await api<SavedLocation>('/api/locations', {
+            method: 'POST',
+            body: JSON.stringify(loc),
+          });
+          set((s) => ({ locations: [...s.locations, newLoc] }));
+        } catch (err: any) {
+          set({ error: err.message });
+        }
+      },
+      removeLocation: async (id) => {
+        try {
+          await api(`/api/locations/${id}`, { method: 'DELETE' });
+          set((s) => ({ locations: s.locations.filter((l) => l.id !== id) }));
+        } catch (err: any) {
+          set({ error: err.message });
+        }
+      },
+      resetSystem: async () => {
+        set({ isLoading: true });
+        try {
+          await api('/api/system/reset', { method: 'POST' });
+          localStorage.removeItem('velocity-os-storage');
+          setTimeout(() => window.location.reload(), 1000);
+        } catch (err: any) {
+          set({ error: err.message, isLoading: false });
+          throw err;
+        }
+      },
+      openMap: (dest) => {
+        if (!dest) {
+          get().updateSettings({ mapPerspective: 'top-down' });
+        }
+        set({ isMapOpen: true, isFollowing: true, activeDestination: dest || null, selectedDiscoveredPlace: null });
+        if (dest) {
+          get().calculateRoute();
+          get().logRecentLocation(dest);
+        }
+      },
+      closeMap: () => set({ isMapOpen: false, activeDestination: null, activeRoute: null, selectedDiscoveredPlace: null }),
+      setFollowing: (isFollowing) => set({ isFollowing }),
+      setGpsStatus: (status) => set({ gpsStatus: status }),
+      setCurrentPos: (pos, speed, heading, error) => {
+        if (error) {
+          set({ gpsStatus: 'denied', currentSpeed: 0, currentPos: null, currentHeading: null });
+        } else {
+          set((state) => {
+            const validHeading = typeof heading === 'number' && !isNaN(heading);
+            const currentH = state.currentHeading ?? 0;
+            const newH = validHeading ? heading : currentH;
+            // Apply threshold filter to prevent marker "jitters" when almost stationary
+            const deltaH = Math.abs(newH - currentH);
+            const finalHeading = (deltaH > 2 || !validHeading) ? newH : currentH;
+            return {
+              currentPos: pos,
+              currentSpeed: speed,
+              currentHeading: finalHeading,
+              gpsStatus: 'granted'
+            };
+          });
+        }
+      },
+      calculateRoute: async () => {
+        const currentPos = get().currentPos;
+        const target = get().activeDestination || get().selectedDiscoveredPlace;
+        if (!currentPos || !target) return;
+        try {
+          const route = await fetchRoute(currentPos, [target.lat, target.lon]);
+          if (!route) {
+            toast.error("Routing service unreachable. Showing destination only.");
+            set({ activeRoute: null });
+            return;
+          }
+          set({ activeRoute: route });
+        } catch (e) {
+          toast.error("Failed to compute path. GPS visual active.");
+          set({ activeRoute: null });
+        }
+      },
+      logRecentLocation: async (loc) => {
+        try {
+          const updatedLoc = { ...loc, lastUsedAt: Date.now() };
+          await api('/api/locations/recent', {
+            method: 'POST',
+            body: JSON.stringify(updatedLoc),
+          });
+          set((s) => {
+            const filtered = s.recentLocations.filter(l => l.id !== loc.id);
+            return { recentLocations: [updatedLoc, ...filtered].slice(0, 10) };
+          });
+        } catch (err) {
+          console.error('Failed to log recent location', err);
+        }
+      },
+      fetchRecentLocations: async () => {
+        try {
+          const res = await api<{ items: SavedLocation[] }>('/api/locations/recent');
+          set({ recentLocations: res.items });
+        } catch (err: any) {
+          set({ error: err.message });
+        }
+      },
+      clearHistory: async () => {
+        try {
+          await api('/api/locations/recent', { method: 'DELETE' });
+          set({ recentLocations: [] });
+        } catch (err: any) {
+          set({ error: err.message });
+        }
+      },
+      startLiveShare: () => {
+        const id = crypto.randomUUID();
+        set({ trackingId: id, isSharingLive: true });
+        toast.success("Live360 Tracking Active");
+      },
+      stopLiveShare: () => {
+        set({ trackingId: null, isSharingLive: false });
+        toast.info("Tracking session ended");
+      },
+      performSearch: async (query) => {
+        if (!query) {
+          set({ searchResults: [] });
+          return;
+        }
+        set({ isSearching: true });
+        try {
+          const results = await searchPlaces(query);
+          set({ searchResults: results, isSearching: false });
+        } catch (e) {
+          set({ isSearching: false });
+          toast.error("Search temporarily unavailable");
+        }
+      },
+      clearSearch: () => set({ searchResults: [], isSearching: false }),
+      setSearchOverlay: (open) => set({ isSearchOverlayOpen: open }),
+      selectDiscoveredPlace: (place) => {
+        // Enforce following state when a new place is chosen to center it
+        set({ 
+          selectedDiscoveredPlace: place, 
+          isSearchOverlayOpen: false, 
+          isMapOpen: true, 
+          isFollowing: true, 
+          activeDestination: null 
+        });
+        if (place) {
+          get().calculateRoute();
+          get().addSearchHistory(place);
+        }
+      },
+      fetchSearchHistory: async () => {
+        try {
+          const res = await api<{ items: SavedLocation[] }>('/api/search/history');
+          set({ searchHistory: res.items });
+        } catch (err: any) {
+          console.error('Failed to fetch search history', err);
+        }
+      },
+      addSearchHistory: async (loc) => {
+        try {
+          await api('/api/search/history', {
+            method: 'POST',
+            body: JSON.stringify(loc),
+          });
+          set((s) => {
+            const filtered = s.searchHistory.filter(h => h.id !== loc.id);
+            return { searchHistory: [loc, ...filtered].slice(0, 20) };
+          });
+        } catch (err) {
+          console.error('Failed to add search history', err);
+        }
+      },
+      clearSearchHistory: async () => {
+        try {
+          await api('/api/search/history', { method: 'DELETE' });
+          set({ searchHistory: [] });
+          toast.success("Search history cleared");
+        } catch (err) {
+          console.error('Failed to clear search history', err);
+        }
+      }
+    }),
+    {
+      name: 'velocity-os-storage',
+      partialize: (state) => ({
+        settings: state.settings,
+        recentLocations: state.recentLocations
+      }),
+    }
+  )
+);

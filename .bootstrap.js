@@ -77,15 +77,7 @@ function updateWranglerJsonc() {
 }
 
 function runSetupCommands() {
-    const commands = [
-    "bun add react-player@^2.16.0",
-    "bun add leaflet react-leaflet @types/leaflet",
-    "bun remove react-leaflet",
-    "bun add react-leaflet@4.2.1",
-    "bun add date-fns",
-    "bun add maplibre-gl react-map-gl",
-    "bun add framer-motion lucide-react clsx tailwind-merge date-fns"
-];
+    const commands = [];
     
     if (commands.length === 0) {
         console.log('⊘ No setup commands to run');
