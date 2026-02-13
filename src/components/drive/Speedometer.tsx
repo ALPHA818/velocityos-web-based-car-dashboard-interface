@@ -3,16 +3,16 @@ import { formatSpeed, haversineDistance } from '@/lib/drive-utils';
 import { Navigation } from 'lucide-react';
 import { useOSStore } from '@/store/use-os-store';
 import { cn } from '@/lib/utils';
-import { motion, useSpring, useMotionValue, useTransform, animate } from 'framer-motion';
+import { motion, useSpring, useMotionValue, useTransform } from 'framer-motion';
 export function Speedometer() {
   const currentPos = useOSStore((s) => s.currentPos);
   const currentSpeed = useOSStore((s) => s.currentSpeed);
   const units = useOSStore((s) => s.settings.units);
   const speedValue = useMotionValue(0);
   const smoothSpeed = useSpring(speedValue, {
-    damping: 30,
-    stiffness: 100,
-    mass: 1
+    damping: 35,
+    stiffness: 90,
+    mass: 1.2
   });
   const displaySpeed = useTransform(smoothSpeed, (latest) => Math.round(latest));
   const prevRef = useRef<{ pos: [number, number]; ts: number } | null>(null);
@@ -41,19 +41,19 @@ export function Speedometer() {
       </div>
       <div className="flex items-baseline gap-4 relative">
         <motion.span
-          className="text-[12rem] font-black tracking-tighter tabular-nums text-primary transition-all duration-300"
+          className="text-[12rem] font-black tracking-tight tabular-nums text-primary transition-all duration-300 leading-none select-none"
           style={{
-            textShadow: "0 0 40px rgba(59,130,246,0.3)"
+            textShadow: "0 0 50px rgba(59,130,246,0.35)"
           }}
         >
           {displaySpeed}
         </motion.span>
-        <span className="text-4xl font-black text-muted-foreground uppercase tracking-[0.3em] ml-2">
+        <span className="text-4xl font-black text-muted-foreground uppercase tracking-[0.3em] tabular-nums ml-2">
           {units}
         </span>
       </div>
       <div className="mt-8 flex gap-4">
-        {[1, 2, 3, 4, 5].map((i) => (
+        {[1, 2, 3, 4, 5, 6].map((i) => (
           <Bar key={i} index={i} smoothSpeed={smoothSpeed} />
         ))}
       </div>
@@ -61,13 +61,13 @@ export function Speedometer() {
   );
 }
 function Bar({ index, smoothSpeed }: { index: number; smoothSpeed: any }) {
-  const threshold = index * 15;
-  const opacity = useTransform(smoothSpeed, [threshold - 5, threshold], [0.3, 1]);
-  const scaleY = useTransform(smoothSpeed, [threshold - 5, threshold], [1, 1.25]);
+  const threshold = index * 12.5; // Adjusted scaling for 6 bars up to ~75 units
+  const opacity = useTransform(smoothSpeed, [threshold - 8, threshold], [0.2, 1]);
+  const scaleY = useTransform(smoothSpeed, [threshold - 8, threshold], [1, 1.35]);
   const bgColor = useTransform(
-    smoothSpeed, 
-    [threshold - 1, threshold], 
-    ["#27272a", "#3b82f6"]
+    smoothSpeed,
+    [threshold - 1, threshold],
+    ["#18181b", "#3b82f6"]
   );
   return (
     <motion.div

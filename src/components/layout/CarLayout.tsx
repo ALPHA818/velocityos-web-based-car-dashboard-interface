@@ -60,22 +60,31 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const track = getTrack(currentTrackIndex);
   const [currentTime, setCurrentTime] = useState(new Date());
   const trackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastThemeUpdateRef = useRef<number>(-1);
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+  // Optimized Auto-Theme Switching
   useEffect(() => {
     if (autoTheme) {
       const hour = currentTime.getHours();
-      const isNight = hour >= 18 || hour < 6;
-      const targetTheme = isNight ? 'dark' : 'light';
-      const targetMapTheme = isNight ? 'highway' : 'light';
-      const settings = useOSStore.getState().settings;
-      if (settings.theme !== targetTheme || settings.mapTheme !== targetMapTheme) {
-        updateSettings({ theme: targetTheme, mapTheme: targetMapTheme as any });
+      // Only check if the hour has changed to avoid constant setting evaluation
+      if (lastThemeUpdateRef.current !== hour) {
+        lastThemeUpdateRef.current = hour;
+        const isNight = hour >= 18 || hour < 6;
+        const targetTheme = isNight ? 'dark' : 'light';
+        const targetMapTheme = isNight ? 'highway' : 'light';
+        const settings = useOSStore.getState().settings;
+        if (settings.theme !== targetTheme || settings.mapTheme !== targetMapTheme) {
+          updateSettings({ theme: targetTheme, mapTheme: targetMapTheme as any });
+        }
       }
+    } else {
+      lastThemeUpdateRef.current = -1; // Reset when disabled
     }
   }, [currentTime, autoTheme, updateSettings]);
+  // Refined Live Share Tracking
   useEffect(() => {
     if (isSharingLive && trackingId && currentPos && gpsStatus === 'granted') {
       if (!trackIntervalRef.current) {
@@ -87,7 +96,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
                 lat: currentPos[0],
                 lon: currentPos[1],
                 speed: currentSpeed || 0,
-                heading: 0
+                heading: useOSStore.getState().currentHeading || 0
               })
             });
           } catch (e) {

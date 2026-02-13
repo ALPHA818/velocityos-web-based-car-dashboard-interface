@@ -142,7 +142,6 @@ export const useOSStore = create<OSState>()(
         }
       },
       openMap: (dest) => {
-        // If no specific destination, default to top-down for overview
         if (!dest) {
           get().updateSettings({ mapPerspective: 'top-down' });
         }
@@ -159,7 +158,15 @@ export const useOSStore = create<OSState>()(
         if (error) {
           set({ gpsStatus: 'denied', currentSpeed: 0, currentPos: null, currentHeading: null });
         } else {
-          set({ currentPos: pos, currentSpeed: speed, currentHeading: heading ?? null, gpsStatus: 'granted' });
+          // HEADING LOCK: Only update currentHeading if a valid number is provided
+          // This prevents "snapping to 0/North" when stationary or signal is lost
+          const validHeading = typeof heading === 'number' && !isNaN(heading);
+          set((state) => ({ 
+            currentPos: pos, 
+            currentSpeed: speed, 
+            currentHeading: validHeading ? heading : state.currentHeading, 
+            gpsStatus: 'granted' 
+          }));
         }
       },
       calculateRoute: async () => {

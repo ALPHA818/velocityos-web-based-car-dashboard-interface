@@ -26,21 +26,25 @@ export function MapView() {
   const mapRef = useRef<any>(null);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showShare, setShowShare] = React.useState(false);
-  // Sync Map View Perspective & Position
+  // Perspective-aware camera logic with offset for driving
   useEffect(() => {
     if (isMapOpen && currentPos && isFollowing && mapRef.current) {
       const isDriving = mapPerspective === 'driving';
-      mapRef.current?.flyTo({
+      const flyOptions: any = {
         center: [currentPos[1], currentPos[0]],
-        zoom: isDriving ? 17 : 14,
+        zoom: isDriving ? 17.5 : 14.5,
         pitch: isDriving ? 60 : 0,
         bearing: isDriving ? (currentHeading ?? 0) : 0,
         essential: true,
-        duration: 1200
-      });
+        duration: 1500,
+      };
+      // Add padding to offset the vehicle to the lower-middle in driving mode
+      if (isDriving) {
+        flyOptions.padding = { top: 300, bottom: 50, left: 0, right: 0 };
+      }
+      mapRef.current?.flyTo(flyOptions);
     }
   }, [currentPos, currentHeading, isFollowing, isMapOpen, mapPerspective]);
-  // Apply map theme filter
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (map) {
@@ -111,10 +115,14 @@ export function MapView() {
                 className="absolute w-12 h-12 bg-primary rounded-full"
               />
               <div
-                className="custom-user-icon w-10 h-10 bg-primary border-4 border-white rounded-full shadow-glow z-10 flex items-center justify-center"
-                style={{ transform: mapPerspective === 'driving' ? `rotate(${currentHeading ?? 0}deg)` : 'none' }}
+                className="custom-user-icon w-12 h-12 bg-primary border-4 border-white rounded-full shadow-glow z-10 flex items-center justify-center"
+                style={{ 
+                  transform: mapPerspective === 'top-down' && currentHeading !== null 
+                    ? `rotate(${currentHeading}deg)` 
+                    : 'none' 
+                }}
               >
-                <Navigation className="w-5 h-5 text-white fill-current" />
+                <Navigation className="w-6 h-6 text-white fill-current" />
               </div>
             </div>
           </Marker>
@@ -137,9 +145,9 @@ export function MapView() {
               type="line"
               paint={{
                 'line-color': '#3b82f6',
-                'line-width': 20,
-                'line-opacity': 0.2,
-                'line-blur': 10
+                'line-width': 22,
+                'line-opacity': 0.25,
+                'line-blur': 12
               }}
             />
             <Layer
@@ -239,7 +247,7 @@ export function MapView() {
         </Button>
       </div>
       {activeRoute && (
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[110] w-[800px]">
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[110] w-[850px]">
           <motion.div
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
