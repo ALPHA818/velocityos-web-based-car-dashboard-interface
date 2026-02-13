@@ -17,6 +17,16 @@ import { SettingsPage } from '@/pages/SettingsPage'
 import { MediaPage } from '@/pages/MediaPage'
 import { AppsPage } from '@/pages/AppsPage'
 const queryClient = new QueryClient();
+
+// Register Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/src/sw.ts', { type: 'module' })
+      .then(reg => console.log('SW registered'))
+      .catch(err => console.error('SW registration failed', err));
+  });
+}
+
 const router = createBrowserRouter([
   {
     path: "/",

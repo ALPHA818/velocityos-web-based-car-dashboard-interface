@@ -28,16 +28,32 @@ const NavButton = ({ icon: Icon, isActive, onClick }: NavButtonProps) => (
 export function CarLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
+  
   useEffect(() => {
-    let wakeLock: any = null;
-    const lock = async () => {
-      wakeLock = await requestWakeLock();
+    let currentWakeLock: any = null;
+    
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        currentWakeLock = await requestWakeLock();
+      } else if (currentWakeLock) {
+        try {
+          await currentWakeLock.release();
+          currentWakeLock = null;
+        } catch (e) {}
+      }
     };
-    lock();
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    handleVisibilityChange(); // Initial lock
+    
     return () => {
-      if (wakeLock) wakeLock.release();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (currentWakeLock) {
+        currentWakeLock.release().catch(() => {});
+      }
     };
   }, []);
+
   return (
     <div className="flex h-screen w-screen bg-black text-foreground overflow-hidden font-sans antialiased">
       {/* Sidebar Dock */}
@@ -46,6 +62,9 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
           <span className="text-xl font-black text-primary tracking-tighter">VOS</span>
           <div className="flex gap-1">
             <Wifi className="w-3 h-3 text-green-500" />
+            {window.matchMedia('(display-mode: standalone)').matches && (
+              <div className="w-1 h-1 bg-primary rounded-full animate-pulse" title="PWA Active" />
+            )}
             <Battery className="w-3 h-3 text-white/50" />
           </div>
         </div>

@@ -17,8 +17,13 @@ export function Speedometer() {
         setSpeed(formatSpeed(s, units));
       },
       (err) => {
-        console.error(err);
-        setError("GPS Error");
+        if (err.code === 1) {
+          setError("Location Denied");
+          console.warn("GPS Permission Denied");
+        } else {
+          setError(`GPS Error (${err.code})`);
+          console.error(`Geolocation error: ${err.message}`);
+        }
       },
       { enableHighAccuracy: true }
     );
@@ -38,7 +43,11 @@ export function Speedometer() {
         </span>
       </div>
       {error && (
-        <span className="text-xs text-destructive mt-2 font-semibold uppercase">{error}</span>
+        <div className="mt-4 px-4 py-2 bg-destructive/10 rounded-full flex items-center gap-2">
+          <span className="text-xs text-destructive font-black uppercase tracking-tighter">
+            {error === "Location Denied" ? "Enable Location in Settings" : error}
+          </span>
+        </div>
       )}
     </div>
   );

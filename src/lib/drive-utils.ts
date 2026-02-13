@@ -6,11 +6,17 @@ export const getGoogleMapsLink = (lat: number, lon: number) => {
 };
 export const requestWakeLock = async () => {
   if ('wakeLock' in navigator) {
+    // Only request if the page is visible
+    if (document.visibilityState !== 'visible') return null;
+    
     try {
       const wakeLock = await (navigator as any).wakeLock.request('screen');
       return wakeLock;
-    } catch (err) {
-      console.error(`Wake Lock error: ${err}`);
+    } catch (err: any) {
+      // Silently handle NotAllowedError or log descriptively
+      if (err.name !== 'NotAllowedError') {
+        console.warn(`Wake Lock request failed: ${err.message}`);
+      }
       return null;
     }
   }
