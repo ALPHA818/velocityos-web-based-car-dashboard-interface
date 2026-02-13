@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import Map, { Marker } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { getMapStyle, getMapFilter } from '@/lib/nav-utils';
-import { Wifi, Clock, Gauge } from 'lucide-react';
+import { Wifi, Clock, Gauge, Navigation } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { formatDistanceToNow } from 'date-fns';
 import type { TrackingState } from '@shared/types';
@@ -13,12 +13,21 @@ export function TrackingPage() {
   const [error, setError] = useState<string | null>(null);
   const mapRef = useRef<any>(null);
   const mapStyle = useMemo(() => getMapStyle('dark'), []);
-
   useEffect(() => {
-    const map = mapRef.current?.getMap();
-    if (map) {
-      map.getCanvas().style.filter = getMapFilter('dark');
-    }
+    const applyFilter = () => {
+      const map = mapRef.current?.getMap();
+      if (map) {
+        map.getCanvas().style.filter = navigator.onLine ? getMapFilter('dark') : 'grayscale(1) saturate(0) brightness(0.6)';
+      }
+    };
+    // Initial apply
+    applyFilter();
+    window.addEventListener('online', applyFilter);
+    window.addEventListener('offline', applyFilter);
+    return () => {
+      window.removeEventListener('online', applyFilter);
+      window.removeEventListener('offline', applyFilter);
+    };
   }, []);
   useEffect(() => {
     const poll = async () => {
@@ -27,7 +36,12 @@ export function TrackingPage() {
         const res = await api<TrackingState>(`/api/tracking/${id}`);
         setData(res);
         if (mapRef.current) {
-          mapRef.current.flyTo({ center: [res.lon, res.lat], zoom: 15 });
+          mapRef.current.flyTo({ 
+            center: [res.lon, res.lat], 
+            zoom: 15,
+            bearing: res.heading || 0,
+            essential: true
+          });
         }
       } catch (err) {
         setError('Connection lost. The session may have ended.');
@@ -37,13 +51,6 @@ export function TrackingPage() {
     const interval = setInterval(poll, 10000);
     return () => clearInterval(interval);
   }, [id]);
-
-  useEffect(() => {
-    const canvas = mapRef.current?.getMap()?.getCanvas();
-    if (canvas) {
-      canvas.style.filter = navigator.onLine ? getMapFilter('dark') : 'grayscale(1) saturate(0) brightness(0.6)';
-    }
-  }, [navigator.onLine]);
   if (error) return (
     <div className="h-screen w-screen bg-black flex flex-col items-center justify-center text-white p-10">
       <div className="p-10 bg-zinc-900 rounded-[3rem] border border-white/10 text-center space-y-6">
@@ -83,8 +90,11 @@ export function TrackingPage() {
           <Marker longitude={data.lon} latitude={data.lat}>
             <div className="vehicle-marker relative w-12 h-12 flex items-center justify-center">
               <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping"></div>
-              <div className="w-8 h-8 bg-primary border-4 border-white rounded-full shadow-glow z-10 flex items-center justify-center">
-                <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[10px] border-b-white transform"></div>
+              <div 
+                className="w-10 h-10 bg-primary border-4 border-white rounded-full shadow-glow z-10 flex items-center justify-center transition-transform duration-500"
+                style={{ transform: `rotate(${data.heading || 0}deg)` }}
+              >
+                <Navigation className="w-5 h-5 text-white fill-current" />
               </div>
             </div>
           </Marker>

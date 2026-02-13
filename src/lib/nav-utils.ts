@@ -30,6 +30,9 @@ export const getMapStyle = (theme: string): any => {
   const bgColor = isHighway ? '#020617' : isDark ? '#09090b' : '#f8fafc';
   return {
     version: 8,
+    name: 'VelocityOS-Precision',
+    metadata: { 'vos:precision': true },
+    glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
     sources: {
       openmap: {
         type: 'raster',
@@ -52,6 +55,17 @@ export const getMapStyle = (theme: string): any => {
         id: 'openmap-layer',
         type: 'raster',
         source: 'openmap'
+      },
+      // Precision Overlay for Roads (Visual Highlight)
+      {
+        id: 'road-precision-glow',
+        type: 'line',
+        source: 'openmap', // Note: OSRM/OpenMap raster doesn't have vector features, but we can overlay our own calculated path later in MapView
+        paint: {
+          'line-color': '#3b82f6',
+          'line-width': 12,
+          'line-opacity': 0.1
+        }
       }
     ]
   };
@@ -68,13 +82,12 @@ export const getCategoryColor = (category: string) => {
 export const getMapFilter = (theme: string): string => {
   switch (theme) {
     case 'dark': return 'sepia(0) contrast(1.25) brightness(0.58) invert(0.85) hue-rotate(160deg)';
-    case 'highway': return 'contrast(1.4) saturate(2) hue-rotate(220deg) brightness(1.1)';
-    case 'vibrant': return 'saturate(1.6) contrast(1.3) brightness(1.05) hue-rotate(10deg)';
+    case 'highway': return 'contrast(1.6) saturate(2) hue-rotate(220deg) brightness(1.2) contrast(1.8)';
+    case 'vibrant': return 'saturate(2.2) contrast(1.4) brightness(1.1) hue-rotate(5deg)';
     case 'offline': return 'grayscale(1) saturate(0) brightness(0.6)';
     default: return 'none';
   }
 };
-
 export const formatETA = (durationSeconds: number): string => {
   const arrivalDate = new Date(Date.now() + durationSeconds * 1000);
   return format(arrivalDate, 'HH:mm');

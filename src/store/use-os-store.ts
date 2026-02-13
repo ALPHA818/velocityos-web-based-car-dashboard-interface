@@ -5,8 +5,9 @@ import type { UserSettings, SavedLocation } from '@shared/types';
 import { fetchRoute, RouteData } from '@/lib/nav-utils';
 import { toast } from 'sonner';
 export type GpsStatus = 'prompt' | 'granted' | 'denied' | 'unsupported';
+export type MapPerspective = 'driving' | 'top-down';
 interface OSState {
-  settings: UserSettings;
+  settings: UserSettings & { mapPerspective?: MapPerspective };
   locations: SavedLocation[];
   recentLocations: SavedLocation[];
   isLoading: boolean;
@@ -15,14 +16,17 @@ interface OSState {
   gpsStatus: GpsStatus;
   isMapOpen: boolean;
   isFollowing: boolean;
+  mapPerspective: MapPerspective;
   activeDestination: SavedLocation | null;
   activeRoute: RouteData | null;
   currentPos: [number, number] | null;
   currentSpeed: number | null;
+  currentHeading: number | null;
   trackingId: string | null;
   isSharingLive: boolean;
   fetchSettings: () => Promise<void>;
-  updateSettings: (patch: Partial<UserSettings>) => Promise<void>;
+  updateSettings: (patch: Partial<UserSettings & { mapPerspective?: MapPerspective }>) => Promise<void>;
+  toggleMapPerspective: () => void;
   fetchLocations: () => Promise<void>;
   addLocation: (loc: Omit<SavedLocation, 'id'>) => Promise<void>;
   removeLocation: (id: string) => Promise<void>;
@@ -31,7 +35,7 @@ interface OSState {
   closeMap: () => void;
   setFollowing: (following: boolean) => void;
   setGpsStatus: (status: GpsStatus) => void;
-  setCurrentPos: (pos: [number, number] | null, speed: number | null, error?: boolean) => void;
+  setCurrentPos: (pos: [number, number] | null, speed: number | null, heading?: number | null, error?: boolean) => void;
   calculateRoute: () => Promise<void>;
   logRecentLocation: (loc: SavedLocation) => Promise<void>;
   startLiveShare: () => void;
@@ -58,10 +62,12 @@ export const useOSStore = create<OSState>()(
       gpsStatus: 'prompt',
       isMapOpen: false,
       isFollowing: true,
+      mapPerspective: 'driving',
       activeDestination: null,
       activeRoute: null,
       currentPos: null,
       currentSpeed: null,
+      currentHeading: null,
       trackingId: null,
       isSharingLive: false,
       fetchSettings: async () => {
@@ -77,7 +83,6 @@ export const useOSStore = create<OSState>()(
       updateSettings: async (patch) => {
         const current = get().settings;
         const optimistic = { ...current, ...patch };
-        // Notify of theme switch if relevant
         if (patch.theme && patch.theme !== current.theme) {
           toast.info(`Switching to ${patch.theme} mode`, { position: 'bottom-center' });
         }
@@ -87,10 +92,13 @@ export const useOSStore = create<OSState>()(
             method: 'POST',
             body: JSON.stringify(patch),
           });
-          set({ settings: data });
+          set({ settings: { ...data, mapPerspective: optimistic.mapPerspective } });
         } catch (err: any) {
           set({ error: err.message, settings: current });
         }
+      },
+      toggleMapPerspective: () => {
+        set((s) => ({ mapPerspective: s.mapPerspective === 'driving' ? 'top-down' : 'driving' }));
       },
       fetchLocations: async () => {
         try {
@@ -131,6 +139,7 @@ export const useOSStore = create<OSState>()(
             error: null,
             isMapOpen: false,
             isFollowing: true,
+            mapPerspective: 'driving',
             activeDestination: null,
             activeRoute: null,
             isSharingLive: false,
@@ -152,11 +161,11 @@ export const useOSStore = create<OSState>()(
       closeMap: () => set({ isMapOpen: false, activeDestination: null, activeRoute: null }),
       setFollowing: (isFollowing) => set({ isFollowing }),
       setGpsStatus: (status) => set({ gpsStatus: status }),
-      setCurrentPos: (pos, speed, error) => {
+      setCurrentPos: (pos, speed, heading, error) => {
         if (error) {
           set({ gpsStatus: 'denied', currentSpeed: 0 });
         } else {
-          set({ currentPos: pos, currentSpeed: speed, gpsStatus: 'granted' });
+          set({ currentPos: pos, currentSpeed: speed, currentHeading: heading ?? null, gpsStatus: 'granted' });
         }
       },
       calculateRoute: async () => {
@@ -210,7 +219,8 @@ export const useOSStore = create<OSState>()(
       name: 'velocity-os-storage',
       partialize: (state) => ({
         settings: state.settings,
-        recentLocations: state.recentLocations
+        recentLocations: state.recentLocations,
+        mapPerspective: state.mapPerspective
       }),
     }
   )

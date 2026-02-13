@@ -51,6 +51,8 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const updateSettings = useOSStore((s) => s.updateSettings);
   const activeDestination = useOSStore((s) => s.activeDestination);
   const isPlaying = useMediaStore((s) => s.isPlaying);
+  const isPlayerReady = useMediaStore((s) => s.isPlayerReady);
+  const setPlayerReady = useMediaStore((s) => s.setPlayerReady);
   const currentTrackIndex = useMediaStore((s) => s.currentTrackIndex);
   const volume = useMediaStore((s) => s.volume);
   const setProgress = useMediaStore((s) => s.setProgress);
@@ -101,8 +103,8 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   }, [isSharingLive, trackingId, currentPos, currentSpeed, gpsStatus]);
   useEffect(() => {
     const watchId = navigator.geolocation.watchPosition(
-      (pos) => setCurrentPos([pos.coords.latitude, pos.coords.longitude], pos.coords.speed),
-      (err) => { if (err.code === err.PERMISSION_DENIED) setCurrentPos(null, 0, true); },
+      (pos) => setCurrentPos([pos.coords.latitude, pos.coords.longitude], pos.coords.speed, pos.coords.heading),
+      (err) => { if (err.code === err.PERMISSION_DENIED) setCurrentPos(null, 0, null, true); },
       { enableHighAccuracy: true }
     );
     let wakeLock: any = null;
@@ -118,8 +120,9 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
       <div className="hidden">
         <ReactPlayer
           url={track?.url || ''}
-          playing={isPlaying}
+          playing={isPlaying && isPlayerReady}
           volume={volume}
+          onReady={() => setPlayerReady(true)}
           onProgress={(s) => setProgress(s.played * 100)}
           onDuration={(d) => setDuration(d)}
           width="0"
@@ -188,7 +191,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
           </AnimatePresence>
         </div>
         <div className={cn(
-          "fixed inset-0 left-28 z-[100] transition-all duration-500 ease-out transform", 
+          "fixed inset-0 left-28 z-[100] transition-all duration-500 ease-out transform",
           !isMapOpen ? "pointer-events-none translate-y-full opacity-0" : "translate-y-0 opacity-100"
         )}>
           <MapView />

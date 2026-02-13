@@ -5,7 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useOSStore } from '@/store/use-os-store';
 import { getCategoryColor, formatETA, getMapStyle, getMapFilter } from '@/lib/nav-utils';
 import type { GeoJSON } from 'geojson';
-import { X, Navigation, Share2, Compass } from 'lucide-react';
+import { X, Navigation, Share2, Compass, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TrackingOverlay } from './TrackingOverlay';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,23 +18,28 @@ export function MapView() {
   const setFollowing = useOSStore((s) => s.setFollowing);
   const isSharingLive = useOSStore((s) => s.isSharingLive);
   const mapTheme = useOSStore((s) => s.settings.mapTheme);
+  const mapPerspective = useOSStore((s) => s.mapPerspective);
+  const toggleMapPerspective = useOSStore((s) => s.toggleMapPerspective);
   const currentPos = useOSStore((s) => s.currentPos);
+  const currentHeading = useOSStore((s) => s.currentHeading);
   const locations = useOSStore((s) => s.locations);
   const mapRef = useRef<any>(null);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showShare, setShowShare] = React.useState(false);
-  // Sync Map View
+  // Sync Map View Perspective
   useEffect(() => {
     if (isMapOpen && currentPos && isFollowing && mapRef.current) {
+      const isDriving = mapPerspective === 'driving';
       mapRef.current.flyTo({
         center: [currentPos[1], currentPos[0]],
-        zoom: 16,
-        pitch: 60,
-        essential: true
+        zoom: isDriving ? 17 : 14,
+        pitch: isDriving ? 60 : 0,
+        bearing: isDriving ? (currentHeading ?? 0) : 0,
+        essential: true,
+        duration: 2000
       });
     }
-  }, [currentPos, isFollowing, isMapOpen]);
-
+  }, [currentPos, currentHeading, isFollowing, isMapOpen, mapPerspective]);
   // Apply map theme filter
   useEffect(() => {
     const map = mapRef.current?.getMap();
@@ -43,7 +48,6 @@ export function MapView() {
       canvas.style.filter = getMapFilter(mapTheme);
     }
   }, [mapTheme, isMapOpen]);
-
   // Handle offline/online status
   useEffect(() => {
     const handleStatus = () => {
@@ -52,7 +56,6 @@ export function MapView() {
       const canvas = map.getCanvas();
       canvas.style.filter = navigator.onLine ? getMapFilter(mapTheme) : 'grayscale(1) saturate(0) brightness(0.6)';
     };
-
     window.addEventListener('online', handleStatus);
     window.addEventListener('offline', handleStatus);
     return () => {
@@ -60,13 +63,12 @@ export function MapView() {
       window.removeEventListener('offline', handleStatus);
     };
   }, [mapTheme]);
-  // Handle auto-follow re-engagement
   const handleMapInteraction = () => {
     if (isFollowing) setFollowing(false);
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
     inactivityTimerRef.current = setTimeout(() => {
       setFollowing(true);
-    }, 10000);
+    }, 15000);
   };
   const mapStyle = useMemo(() => getMapStyle(mapTheme), [mapTheme]);
   const routeGeoJSON = useMemo((): GeoJSON.Feature<GeoJSON.LineString> | null => {
@@ -83,15 +85,19 @@ export function MapView() {
   if (!isMapOpen) return null;
   return (
     <div className="fixed inset-0 z-[100] bg-black overflow-hidden">
-      {/* Top Safe Zone Gradient */}
-      <div className="absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-black/80 to-transparent z-[101] pointer-events-none" />
+      {/* Dynamic Safe Zone Gradient */}
+      <div className={cn(
+        "absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-black/80 to-transparent z-[101] pointer-events-none transition-opacity duration-500",
+        mapPerspective === 'top-down' ? "opacity-30" : "opacity-100"
+      )} />
       <Map
         ref={mapRef}
         initialViewState={{
           longitude: currentPos ? currentPos[1] : -74.006,
           latitude: currentPos ? currentPos[0] : 40.7128,
           zoom: 13,
-          pitch: 45
+          pitch: mapPerspective === 'driving' ? 60 : 0,
+          bearing: 0
         }}
         mapStyle={mapStyle}
         onDrag={handleMapInteraction}
@@ -106,7 +112,12 @@ export function MapView() {
                 transition={{ repeat: Infinity, duration: 2, ease: "easeOut" }}
                 className="absolute w-12 h-12 bg-primary rounded-full"
               />
-              <div className="custom-user-icon w-8 h-8 bg-primary border-4 border-white rounded-full shadow-glow z-10" />
+              <div 
+                className="custom-user-icon w-10 h-10 bg-primary border-4 border-white rounded-full shadow-glow z-10 flex items-center justify-center"
+                style={{ transform: mapPerspective === 'driving' ? `rotate(${currentHeading ?? 0}deg)` : 'none' }}
+              >
+                <Navigation className="w-5 h-5 text-white fill-current" />
+              </div>
             </div>
           </Marker>
         )}
@@ -124,14 +135,23 @@ export function MapView() {
         {routeGeoJSON && (
           <Source id="route-source" type="geojson" data={routeGeoJSON}>
             <Layer
+              id="route-layer-glow"
+              type="line"
+              paint={{
+                'line-color': '#3b82f6',
+                'line-width': 20,
+                'line-opacity': 0.2,
+                'line-blur': 10
+              }}
+            />
+            <Layer
               id="route-layer"
               type="line"
               layout={{ 'line-join': 'round', 'line-cap': 'round' }}
               paint={{
                 'line-color': '#3b82f6',
-                'line-width': 10,
-                'line-opacity': 0.8,
-                'line-blur': 1
+                'line-width': 12,
+                'line-opacity': 1
               }}
             />
           </Source>
@@ -150,7 +170,7 @@ export function MapView() {
           </Button>
           <AnimatePresence>
             {activeDestination && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
@@ -175,7 +195,7 @@ export function MapView() {
             size="lg"
             onClick={() => setShowShare(true)}
             className={cn(
-              "h-24 w-24 rounded-[2rem] bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-90 transition-transform", 
+              "h-24 w-24 rounded-[2rem] bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-90 transition-transform",
               isSharingLive && "text-primary border-primary/50"
             )}
           >
@@ -183,8 +203,16 @@ export function MapView() {
           </Button>
         </div>
       </div>
-      {/* Control Buttons */}
-      <div className="absolute bottom-10 right-10 z-[110] flex flex-col gap-4">
+      {/* Perspective Toggle & Compass */}
+      <div className="absolute bottom-10 right-10 z-[110] flex flex-col gap-6">
+         <Button
+          variant="secondary"
+          size="lg"
+          className="h-24 w-24 rounded-[2.5rem] bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow-lg active:scale-90 transition-all"
+          onClick={toggleMapPerspective}
+        >
+          {mapPerspective === 'driving' ? <Layers className="w-12 h-12" /> : <Navigation className="w-12 h-12" />}
+        </Button>
          <Button
           variant={isFollowing ? "default" : "secondary"}
           size="lg"

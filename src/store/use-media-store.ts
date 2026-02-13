@@ -31,12 +31,14 @@ const PLAYLIST: Track[] = [
 ];
 interface MediaState {
   isPlaying: boolean;
+  isPlayerReady: boolean;
   currentTrackIndex: number;
   volume: number;
   progress: number;
   duration: number;
   // Actions
   togglePlay: () => void;
+  setPlayerReady: (ready: boolean) => void;
   nextTrack: () => void;
   prevTrack: () => void;
   setVolume: (vol: number) => void;
@@ -45,18 +47,22 @@ interface MediaState {
 }
 export const useMediaStore = create<MediaState>((set) => ({
   isPlaying: false,
+  isPlayerReady: false,
   currentTrackIndex: 0,
   volume: 0.8,
   progress: 0,
   duration: 0,
   togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
-  nextTrack: () => set((state) => ({ 
+  setPlayerReady: (ready) => set({ isPlayerReady: ready }),
+  nextTrack: () => set((state) => ({
     currentTrackIndex: (state.currentTrackIndex + 1) % PLAYLIST.length,
-    progress: 0
+    progress: 0,
+    isPlayerReady: false // Reset on track change to wait for next instance
   })),
-  prevTrack: () => set((state) => ({ 
+  prevTrack: () => set((state) => ({
     currentTrackIndex: (state.currentTrackIndex - 1 + PLAYLIST.length) % PLAYLIST.length,
-    progress: 0
+    progress: 0,
+    isPlayerReady: false
   })),
   setVolume: (volume) => set({ volume }),
   setProgress: (progress) => set({ progress }),
