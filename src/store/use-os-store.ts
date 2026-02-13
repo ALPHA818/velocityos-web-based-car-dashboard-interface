@@ -169,21 +169,38 @@ export const useOSStore = create<OSState>()(
         if (error) {
           set({ gpsStatus: 'denied', currentSpeed: 0, currentPos: null, currentHeading: null });
         } else {
-          const validHeading = typeof heading === 'number' && !isNaN(heading);
-          set((state) => ({
-            currentPos: pos,
-            currentSpeed: speed,
-            currentHeading: validHeading ? heading : state.currentHeading,
-            gpsStatus: 'granted'
-          }));
+          set((state) => {
+            const validHeading = typeof heading === 'number' && !isNaN(heading);
+            const currentH = state.currentHeading ?? 0;
+            const newH = validHeading ? heading : currentH;
+            // Apply threshold filter to prevent marker "jitters" when almost stationary
+            const deltaH = Math.abs(newH - currentH);
+            const finalHeading = (deltaH > 2 || !validHeading) ? newH : currentH;
+            return {
+              currentPos: pos,
+              currentSpeed: speed,
+              currentHeading: finalHeading,
+              gpsStatus: 'granted'
+            };
+          });
         }
       },
       calculateRoute: async () => {
         const currentPos = get().currentPos;
         const target = get().activeDestination || get().selectedDiscoveredPlace;
         if (!currentPos || !target) return;
-        const route = await fetchRoute(currentPos, [target.lat, target.lon]);
-        set({ activeRoute: route });
+        try {
+          const route = await fetchRoute(currentPos, [target.lat, target.lon]);
+          if (!route) {
+            toast.error("Routing service unreachable. Showing destination only.");
+            set({ activeRoute: null });
+            return;
+          }
+          set({ activeRoute: route });
+        } catch (e) {
+          toast.error("Failed to compute path. GPS visual active.");
+          set({ activeRoute: null });
+        }
       },
       logRecentLocation: async (loc) => {
         try {
@@ -219,9 +236,11 @@ export const useOSStore = create<OSState>()(
       startLiveShare: () => {
         const id = crypto.randomUUID();
         set({ trackingId: id, isSharingLive: true });
+        toast.success("Live360 Tracking Active");
       },
       stopLiveShare: () => {
         set({ trackingId: null, isSharingLive: false });
+        toast.info("Tracking session ended");
       },
       performSearch: async (query) => {
         if (!query) {
@@ -234,12 +253,20 @@ export const useOSStore = create<OSState>()(
           set({ searchResults: results, isSearching: false });
         } catch (e) {
           set({ isSearching: false });
+          toast.error("Search temporarily unavailable");
         }
       },
       clearSearch: () => set({ searchResults: [], isSearching: false }),
       setSearchOverlay: (open) => set({ isSearchOverlayOpen: open }),
       selectDiscoveredPlace: (place) => {
-        set({ selectedDiscoveredPlace: place, isSearchOverlayOpen: false, isMapOpen: true, isFollowing: true, activeDestination: null });
+        // Enforce following state when a new place is chosen to center it
+        set({ 
+          selectedDiscoveredPlace: place, 
+          isSearchOverlayOpen: false, 
+          isMapOpen: true, 
+          isFollowing: true, 
+          activeDestination: null 
+        });
         if (place) {
           get().calculateRoute();
           get().addSearchHistory(place);
@@ -271,6 +298,7 @@ export const useOSStore = create<OSState>()(
         try {
           await api('/api/search/history', { method: 'DELETE' });
           set({ searchHistory: [] });
+          toast.success("Search history cleared");
         } catch (err) {
           console.error('Failed to clear search history', err);
         }

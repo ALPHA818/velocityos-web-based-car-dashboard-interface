@@ -10,9 +10,9 @@ export function Speedometer() {
   const units = useOSStore((s) => s.settings.units);
   const speedValue = useMotionValue(0);
   const smoothSpeed = useSpring(speedValue, {
-    damping: 35,
-    stiffness: 90,
-    mass: 1.2
+    damping: 25, // Reduced damping for faster response
+    stiffness: 120, // Increased stiffness for punchier updates
+    mass: 1
   });
   const displaySpeed = useTransform(smoothSpeed, (latest) => Math.round(latest));
   const prevRef = useRef<{ pos: [number, number]; ts: number } | null>(null);
@@ -23,11 +23,11 @@ export function Speedometer() {
     if (prevRef.current) {
       const prev = prevRef.current;
       const dt = (now - prev.ts) / 1000;
-      if (dt > 0.5 && dt < 10) {
+      if (dt > 0.4 && dt < 8) {
         const dist = haversineDistance(currentPos[0], currentPos[1], prev.pos[0], prev.pos[1]);
         const calcSpeed = dist / dt;
-        // Weighted average to filter GPS noise
-        computedSpeed = (computedSpeed + calcSpeed) / 2;
+        // Faster smoothing to reduce lag during acceleration
+        computedSpeed = (computedSpeed * 0.4) + (calcSpeed * 0.6);
       }
     }
     const targetConverted = formatSpeed(computedSpeed, units);
@@ -41,9 +41,9 @@ export function Speedometer() {
       </div>
       <div className="flex items-baseline gap-4 relative">
         <motion.span
-          className="text-[12rem] font-black tracking-tight tabular-nums text-primary transition-all duration-300 leading-none select-none"
+          className="text-[12rem] font-black tracking-tight tabular-nums text-primary transition-all duration-300 leading-none select-none text-neon"
           style={{
-            textShadow: "0 0 50px rgba(59,130,246,0.35)"
+            textShadow: "0 0 60px rgba(59,130,246,0.45)"
           }}
         >
           {displaySpeed}
@@ -61,18 +61,23 @@ export function Speedometer() {
   );
 }
 function Bar({ index, smoothSpeed }: { index: number; smoothSpeed: any }) {
-  const threshold = index * 12.5; // Adjusted scaling for 6 bars up to ~75 units
-  const opacity = useTransform(smoothSpeed, [threshold - 8, threshold], [0.2, 1]);
-  const scaleY = useTransform(smoothSpeed, [threshold - 8, threshold], [1, 1.35]);
+  const threshold = index * 10; // Dynamic scaling based on 6 bars up to 60+ units
+  const opacity = useTransform(smoothSpeed, [threshold - 10, threshold], [0.15, 1]);
+  const scaleY = useTransform(smoothSpeed, [threshold - 10, threshold], [1, 1.45]);
   const bgColor = useTransform(
     smoothSpeed,
-    [threshold - 1, threshold],
-    ["#18181b", "#3b82f6"]
+    [threshold - 10, threshold, threshold + 30],
+    ["#18181b", "#3b82f6", "#ffffff"] // Gradient shift to white as speed peaks
   );
   return (
     <motion.div
-      style={{ opacity, scaleY, backgroundColor: bgColor }}
-      className="h-3 w-16 rounded-full"
+      style={{ 
+        opacity, 
+        scaleY, 
+        backgroundColor: bgColor,
+        boxShadow: useTransform(smoothSpeed, [threshold - 5, threshold], ["none", "0 0 15px rgba(59,130,246,0.5)"])
+      }}
+      className="h-4 w-18 rounded-full transition-shadow duration-300"
     />
   );
 }

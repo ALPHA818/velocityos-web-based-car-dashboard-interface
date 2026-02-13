@@ -38,91 +38,142 @@ export function NavigationHub() {
     e.preventDefault();
     const lat = parseFloat(formData.lat);
     const lon = parseFloat(formData.lon);
-    if (!formData.label.trim() || isNaN(lat) || isNaN(lon)) return toast.error('Invalid input');
+    if (!formData.label.trim() || isNaN(lat) || isNaN(lon)) return toast.error('Please fill all required fields');
     try {
-      await addLocation({ label: formData.label.trim(), address: formData.address.trim() || 'Saved Place', category: formData.category, lat, lon });
-      toast.success('Location saved');
+      await addLocation({ 
+        label: formData.label.trim(), 
+        address: formData.address.trim() || 'Saved Destination', 
+        category: formData.category, 
+        lat, 
+        lon 
+      });
+      toast.success('Destination secured');
       setIsDialogOpen(false);
       setFormData({ label: '', address: '', category: 'favorite', lat: '', lon: '' });
-    } catch (err) { toast.error('Failed to save'); }
+    } catch (err) { toast.error('System failed to save location'); }
   };
-  const LocationGrid = ({ items, emptyMsg }: { items: SavedLocation[], emptyMsg: string }) => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+  const LocationGrid = ({ items, emptyMsg, showAddCta = false }: { items: SavedLocation[], emptyMsg: string, showAddCta?: boolean }) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
       {items.length > 0 ? (
         items.map((loc, idx) => {
           const Icon = CATEGORY_ICONS[loc.category] || MapPin;
           return (
-            <motion.button key={loc.id + idx} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: idx * 0.05 }} onClick={() => openMap(loc)} className="dashboard-card flex flex-col items-start text-left gap-4 hover:border-primary/50 group bg-zinc-900/40">
-              <div className="p-4 rounded-2xl transition-colors" style={{ backgroundColor: `${getCategoryColor(loc.category)}15`, color: getCategoryColor(loc.category) }}><Icon className="w-8 h-8" /></div>
+            <motion.button 
+              key={loc.id + idx} 
+              initial={{ opacity: 0, scale: 0.95 }} 
+              animate={{ opacity: 1, scale: 1 }} 
+              transition={{ delay: idx * 0.04 }} 
+              onClick={() => openMap(loc)} 
+              className="dashboard-card flex flex-col items-start text-left gap-5 hover:border-primary/50 group bg-zinc-900/40 relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none uppercase font-black text-2xl group-hover:opacity-10 transition-opacity">
+                {loc.category}
+              </div>
+              <div 
+                className="p-5 rounded-2xl transition-all group-hover:scale-110" 
+                style={{ backgroundColor: `${getCategoryColor(loc.category)}15`, color: getCategoryColor(loc.category) }}
+              >
+                <Icon className="w-9 h-9" />
+              </div>
               <div className="flex-1 w-full">
                 <div className="flex justify-between items-start">
-                  <h3 className="text-2xl font-bold truncate max-w-[80%]">{loc.label}</h3>
-                  {loc.lastUsedAt && <span className="text-xs text-muted-foreground whitespace-nowrap mt-2">{formatDistanceToNow(loc.lastUsedAt)} ago</span>}
+                  <h3 className="text-3xl font-black truncate max-w-[80%] tracking-tight">{loc.label}</h3>
+                  {loc.lastUsedAt && (
+                    <span className="text-xs text-muted-foreground whitespace-nowrap mt-2 font-bold uppercase tracking-widest opacity-60">
+                      {formatDistanceToNow(loc.lastUsedAt)}
+                    </span>
+                  )}
                 </div>
-                <p className="text-muted-foreground line-clamp-1">{loc.address}</p>
+                <p className="text-xl text-muted-foreground line-clamp-1 mt-1 opacity-80">{loc.address}</p>
               </div>
             </motion.button>
           );
         })
       ) : (
-        <div className="col-span-full py-20 text-center dashboard-card border-dashed opacity-50">
-          <MapPin className="w-16 h-16 mx-auto mb-4 opacity-20" />
-          <p className="text-xl text-muted-foreground font-medium">{emptyMsg}</p>
+        <div className="col-span-full py-24 text-center dashboard-card border-dashed border-white/10 flex flex-col items-center justify-center gap-6">
+          <div className="p-10 bg-white/5 rounded-full">
+            <Compass className="w-20 h-20 text-muted-foreground opacity-20" />
+          </div>
+          <div className="space-y-2">
+            <p className="text-3xl text-muted-foreground font-black uppercase tracking-widest">{emptyMsg}</p>
+            {showAddCta && <p className="text-xl text-muted-foreground/50">Tap "Add Place" to bookmark your first destination.</p>}
+          </div>
         </div>
       )}
     </div>
   );
   return (
     <CarLayout>
-      <div className="max-w-7xl mx-auto space-y-10">
-        <header className="flex justify-between items-end gap-10">
-          <div className="flex-1 space-y-4">
-            <h1 className="text-6xl font-black tracking-tighter">Navigate</h1>
-            <div 
-              className="dashboard-card p-6 flex items-center gap-6 cursor-pointer hover:border-primary/50 group transition-all"
+      <div className="max-w-7xl mx-auto space-y-12">
+        <header className="flex flex-col lg:flex-row justify-between lg:items-end gap-10">
+          <div className="flex-1 space-y-6">
+            <h1 className="text-7xl font-black tracking-tighter">Navigation</h1>
+            <div
+              className="dashboard-card p-8 flex items-center gap-8 cursor-pointer hover:border-primary/50 group transition-all bg-primary/5 border-primary/20 shadow-glow"
               onClick={() => setSearchOverlay(true)}
             >
-              <Search className="w-10 h-10 text-muted-foreground group-hover:text-primary transition-colors" />
-              <span className="text-2xl font-bold text-muted-foreground">Search destinations anywhere in the world...</span>
+              <Search className="w-12 h-12 text-primary animate-pulse" />
+              <span className="text-3xl font-bold text-muted-foreground group-hover:text-foreground transition-colors">
+                Search destinations globally...
+              </span>
             </div>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="lg" className="rounded-[2rem] h-20 px-10 gap-3 bg-primary text-primary-foreground shadow-glow-lg text-xl font-bold mb-1">
-                <Plus className="w-8 h-8" /> Add Place
+              <Button size="lg" className="rounded-[2.5rem] h-24 px-12 gap-4 bg-primary text-primary-foreground shadow-glow-lg text-2xl font-black hover:scale-105 transition-transform">
+                <Plus className="w-10 h-10" /> Add Destination
               </Button>
             </DialogTrigger>
-            <DialogContent className="bg-zinc-950 border-white/10 text-white sm:max-w-[550px] rounded-[3rem] p-10">
-              <DialogHeader><DialogTitle className="text-3xl font-black">New Destination</DialogTitle></DialogHeader>
-              <form onSubmit={handleSave} className="space-y-8 pt-6">
-                <div className="space-y-3"><Label className="text-lg">Label</Label><Input value={formData.label} onChange={e => setFormData(p => ({...p, label: e.target.value}))} className="h-16 bg-zinc-900 border-white/5 rounded-2xl text-xl" /></div>
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-3"><Label className="text-lg">Latitude</Label><Input value={formData.lat} onChange={e => setFormData(p => ({...p, lat: e.target.value}))} className="h-16 bg-zinc-900 border-white/5 rounded-2xl text-xl" /></div>
-                  <div className="space-y-3"><Label className="text-lg">Longitude</Label><Input value={formData.lon} onChange={e => setFormData(p => ({...p, lon: e.target.value}))} className="h-16 bg-zinc-900 border-white/5 rounded-2xl text-xl" /></div>
+            <DialogContent className="bg-zinc-950 border-white/10 text-white sm:max-w-[600px] rounded-[3.5rem] p-12">
+              <DialogHeader><DialogTitle className="text-4xl font-black tracking-tighter">New Destination</DialogTitle></DialogHeader>
+              <form onSubmit={handleSave} className="space-y-8 pt-8">
+                <div className="space-y-4">
+                  <Label className="text-xl font-bold ml-2">Display Name</Label>
+                  <Input placeholder="e.g. Favorite Coffee Shop" value={formData.label} onChange={e => setFormData(p => ({...p, label: e.target.value}))} className="h-20 bg-zinc-900 border-white/5 rounded-2xl text-2xl px-6" />
                 </div>
-                <div className="space-y-3">
-                  <Label className="text-lg">Category</Label>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <Label className="text-xl font-bold ml-2">Latitude</Label>
+                    <Input placeholder="40.7128" value={formData.lat} onChange={e => setFormData(p => ({...p, lat: e.target.value}))} className="h-20 bg-zinc-900 border-white/5 rounded-2xl text-2xl px-6" />
+                  </div>
+                  <div className="space-y-4">
+                    <Label className="text-xl font-bold ml-2">Longitude</Label>
+                    <Input placeholder="-74.0060" value={formData.lon} onChange={e => setFormData(p => ({...p, lon: e.target.value}))} className="h-20 bg-zinc-900 border-white/5 rounded-2xl text-2xl px-6" />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <Label className="text-xl font-bold ml-2">Category</Label>
                   <Select value={formData.category} onValueChange={v => setFormData(p => ({...p, category: v as any}))}>
-                    <SelectTrigger className="h-16 bg-zinc-900 border-white/5 rounded-2xl text-xl"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-zinc-900 border-white/10"><SelectItem value="home">Home</SelectItem><SelectItem value="work">Work</SelectItem><SelectItem value="favorite">Favorite</SelectItem></SelectContent>
+                    <SelectTrigger className="h-20 bg-zinc-900 border-white/5 rounded-2xl text-2xl px-6"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-zinc-900 border-white/10">
+                      <SelectItem value="home" className="text-xl p-4">Home</SelectItem>
+                      <SelectItem value="work" className="text-xl p-4">Work</SelectItem>
+                      <SelectItem value="favorite" className="text-xl p-4">Favorite</SelectItem>
+                    </SelectContent>
                   </Select>
                 </div>
-                <Button type="submit" className="w-full h-20 rounded-2xl text-2xl font-black mt-4">Save Location</Button>
+                <Button type="submit" className="w-full h-24 rounded-3xl text-3xl font-black mt-4 shadow-glow">Confirm Destination</Button>
               </form>
             </DialogContent>
           </Dialog>
         </header>
-        <Tabs defaultValue="favorites" className="space-y-8">
-          <TabsList className="bg-zinc-900/50 p-2 h-20 rounded-[2rem] border border-white/5 w-fit">
-            <TabsTrigger value="favorites" className="h-full px-10 rounded-[1.5rem] text-xl font-bold data-[state=active]:bg-primary">Favorites</TabsTrigger>
-            <TabsTrigger value="recents" className="h-full px-10 rounded-[1.5rem] text-xl font-bold data-[state=active]:bg-primary">Recent Trips</TabsTrigger>
-          </TabsList>
-          <TabsContent value="favorites"><LocationGrid items={locations} emptyMsg="No favorites saved yet" /></TabsContent>
-          <TabsContent value="recents">
-            <div className="space-y-6">
-              <div className="flex justify-end"><Button variant="ghost" className="text-muted-foreground hover:text-destructive gap-2 h-14 rounded-2xl px-6" onClick={clearHistory}><Trash2 className="w-5 h-5" /> Clear History</Button></div>
-              <LocationGrid items={recentLocations} emptyMsg="Your recent history will appear here" />
+        <Tabs defaultValue="favorites" className="space-y-10">
+          <div className="flex justify-center">
+            <TabsList className="bg-zinc-900/50 p-3 h-24 rounded-[2.5rem] border border-white/5 w-fit shadow-2xl">
+              <TabsTrigger value="favorites" className="h-full px-12 rounded-[1.8rem] text-2xl font-black data-[state=active]:bg-primary data-[state=active]:text-white transition-all">Favorites</TabsTrigger>
+              <TabsTrigger value="recents" className="h-full px-12 rounded-[1.8rem] text-2xl font-black data-[state=active]:bg-primary data-[state=active]:text-white transition-all">Recent History</TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="favorites" className="focus-visible:outline-none">
+            <LocationGrid items={locations} emptyMsg="No Bookmarks Found" showAddCta />
+          </TabsContent>
+          <TabsContent value="recents" className="focus-visible:outline-none space-y-8">
+            <div className="flex justify-end">
+              <Button variant="ghost" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-3 h-16 rounded-2xl px-8 text-xl font-bold" onClick={clearHistory}>
+                <Trash2 className="w-6 h-6" /> Purge History
+              </Button>
             </div>
+            <LocationGrid items={recentLocations} emptyMsg="No Recent Activity" />
           </TabsContent>
         </Tabs>
       </div>
