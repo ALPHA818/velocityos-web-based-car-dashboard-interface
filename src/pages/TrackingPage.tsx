@@ -20,7 +20,6 @@ export function TrackingPage() {
         map.getCanvas().style.filter = navigator.onLine ? getMapFilter('dark') : 'grayscale(1) saturate(0) brightness(0.6)';
       }
     };
-    // Initial apply
     applyFilter();
     window.addEventListener('online', applyFilter);
     window.addEventListener('offline', applyFilter);
@@ -36,11 +35,12 @@ export function TrackingPage() {
         const res = await api<TrackingState>(`/api/tracking/${id}`);
         setData(res);
         if (mapRef.current) {
-          mapRef.current.flyTo({ 
-            center: [res.lon, res.lat], 
+          mapRef.current?.flyTo({
+            center: [res.lon, res.lat],
             zoom: 15,
             bearing: res.heading || 0,
-            essential: true
+            essential: true,
+            duration: 2000
           });
         }
       } catch (err) {
@@ -82,7 +82,8 @@ export function TrackingPage() {
           initialViewState={{
             longitude: data.lon,
             latitude: data.lat,
-            zoom: 15
+            zoom: 15,
+            bearing: data.heading || 0
           }}
           mapStyle={mapStyle}
           style={{ width: '100%', height: '100%' }}
@@ -90,7 +91,7 @@ export function TrackingPage() {
           <Marker longitude={data.lon} latitude={data.lat}>
             <div className="vehicle-marker relative w-12 h-12 flex items-center justify-center">
               <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping"></div>
-              <div 
+              <div
                 className="w-10 h-10 bg-primary border-4 border-white rounded-full shadow-glow z-10 flex items-center justify-center transition-transform duration-500"
                 style={{ transform: `rotate(${data.heading || 0}deg)` }}
               >

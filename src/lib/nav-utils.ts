@@ -55,17 +55,6 @@ export const getMapStyle = (theme: string): any => {
         id: 'openmap-layer',
         type: 'raster',
         source: 'openmap'
-      },
-      // Precision Overlay for Roads (Visual Highlight)
-      {
-        id: 'road-precision-glow',
-        type: 'line',
-        source: 'openmap', // Note: OSRM/OpenMap raster doesn't have vector features, but we can overlay our own calculated path later in MapView
-        paint: {
-          'line-color': '#3b82f6',
-          'line-width': 12,
-          'line-opacity': 0.1
-        }
       }
     ]
   };

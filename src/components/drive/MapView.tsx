@@ -30,13 +30,13 @@ export function MapView() {
   useEffect(() => {
     if (isMapOpen && currentPos && isFollowing && mapRef.current) {
       const isDriving = mapPerspective === 'driving';
-      mapRef.current.flyTo({
+      mapRef.current?.flyTo({
         center: [currentPos[1], currentPos[0]],
         zoom: isDriving ? 17 : 14,
         pitch: isDriving ? 60 : 0,
         bearing: isDriving ? (currentHeading ?? 0) : 0,
         essential: true,
-        duration: 2000
+        duration: 1000 // Optimized for GPS polling interval
       });
     }
   }, [currentPos, currentHeading, isFollowing, isMapOpen, mapPerspective]);
@@ -85,7 +85,6 @@ export function MapView() {
   if (!isMapOpen) return null;
   return (
     <div className="fixed inset-0 z-[100] bg-black overflow-hidden">
-      {/* Dynamic Safe Zone Gradient */}
       <div className={cn(
         "absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-black/80 to-transparent z-[101] pointer-events-none transition-opacity duration-500",
         mapPerspective === 'top-down' ? "opacity-30" : "opacity-100"
@@ -112,7 +111,7 @@ export function MapView() {
                 transition={{ repeat: Infinity, duration: 2, ease: "easeOut" }}
                 className="absolute w-12 h-12 bg-primary rounded-full"
               />
-              <div 
+              <div
                 className="custom-user-icon w-10 h-10 bg-primary border-4 border-white rounded-full shadow-glow z-10 flex items-center justify-center"
                 style={{ transform: mapPerspective === 'driving' ? `rotate(${currentHeading ?? 0}deg)` : 'none' }}
               >
@@ -157,7 +156,6 @@ export function MapView() {
           </Source>
         )}
       </Map>
-      {/* Header UI */}
       <div className="absolute top-8 left-32 right-8 z-[110] flex justify-between items-start">
         <div className="flex gap-4">
           <Button
@@ -203,7 +201,6 @@ export function MapView() {
           </Button>
         </div>
       </div>
-      {/* Perspective Toggle & Compass */}
       <div className="absolute bottom-10 right-10 z-[110] flex flex-col gap-6">
          <Button
           variant="secondary"
@@ -225,7 +222,6 @@ export function MapView() {
           <Compass className={cn("w-12 h-12", isFollowing && "animate-pulse")} />
         </Button>
       </div>
-      {/* Footer Info Panel */}
       {activeRoute && (
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[110] w-[800px]">
           <motion.div

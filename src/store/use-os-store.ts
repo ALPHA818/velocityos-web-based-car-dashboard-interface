@@ -131,21 +131,11 @@ export const useOSStore = create<OSState>()(
         set({ isLoading: true });
         try {
           await api('/api/system/reset', { method: 'POST' });
-          set({
-            settings: { id: 'default', units: 'mph', mapProvider: 'google', mapTheme: 'highway', theme: 'dark', autoTheme: true },
-            locations: [],
-            recentLocations: [],
-            isLoading: false,
-            error: null,
-            isMapOpen: false,
-            isFollowing: true,
-            mapPerspective: 'driving',
-            activeDestination: null,
-            activeRoute: null,
-            isSharingLive: false,
-            trackingId: null
-          });
           localStorage.removeItem('velocity-os-storage');
+          toast.success('System reset complete. Reloading...', { position: 'top-center' });
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
         } catch (err: any) {
           set({ error: err.message, isLoading: false });
           throw err;
