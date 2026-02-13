@@ -78,7 +78,8 @@ function updateWranglerJsonc() {
 
 function runSetupCommands() {
     const commands = [
-    "bun add react-player@^2.16.0"
+    "bun add react-player@^2.16.0",
+    "bun add leaflet react-leaflet @types/leaflet"
 ];
     
     if (commands.length === 0) {
