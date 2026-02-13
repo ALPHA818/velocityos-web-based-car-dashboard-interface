@@ -82,7 +82,8 @@ function runSetupCommands() {
     "bun add leaflet react-leaflet @types/leaflet",
     "bun remove react-leaflet",
     "bun add react-leaflet@4.2.1",
-    "bun add date-fns"
+    "bun add date-fns",
+    "bun add maplibre-gl react-map-gl"
 ];
     
     if (commands.length === 0) {
