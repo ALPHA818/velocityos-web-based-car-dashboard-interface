@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useOSStore } from '@/store/use-os-store';
-import { Search, X, MapPin, Loader2, Navigation, Compass, Clock, Trash2 } from 'lucide-react';
+import { Search, X, MapPin, Loader2, Navigation, Compass } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -10,28 +10,19 @@ export function SearchOverlay() {
   const setSearchOverlay = useOSStore(s => s.setSearchOverlay);
   const isSearching = useOSStore(s => s.isSearching);
   const searchResults = useOSStore(s => s.searchResults);
-  const searchHistory = useOSStore(s => s.searchHistory);
   const performSearch = useOSStore(s => s.performSearch);
   const selectDiscoveredPlace = useOSStore(s => s.selectDiscoveredPlace);
-  const fetchSearchHistory = useOSStore(s => s.fetchSearchHistory);
-  const clearSearchHistory = useOSStore(s => s.clearSearchHistory);
   const [query, setQuery] = useState('');
   useEffect(() => {
-    if (isOpen) {
-      fetchSearchHistory();
-    }
-  }, [isOpen, fetchSearchHistory]);
-  useEffect(() => {
     const timer = setTimeout(() => {
-      if (query.length >= 3) performSearch(query);
+      if (query) performSearch(query);
     }, 400);
     return () => clearTimeout(timer);
   }, [query, performSearch]);
   if (!isOpen) return null;
-  const showHistory = query.length < 3 && searchHistory.length > 0;
   return (
-    <div className="fixed inset-0 z-[2000] bg-zinc-950/95 backdrop-blur-xl p-6 md:p-10 flex flex-col items-center">
-      <div className="w-full max-w-5xl flex flex-col h-full space-y-10">
+    <div className="fixed inset-0 z-[2000] bg-zinc-950/95 backdrop-blur-xl p-10 flex flex-col items-center">
+      <div className="w-full max-w-5xl flex flex-col h-full space-y-8">
         <header className="flex items-center gap-6">
           <div className="relative flex-1 group">
             <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-10 h-10 text-muted-foreground group-focus-within:text-primary transition-colors" />
@@ -56,7 +47,6 @@ export function SearchOverlay() {
           <AnimatePresence mode="popLayout">
             {isSearching ? (
               <motion.div
-                key="searching"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -65,7 +55,7 @@ export function SearchOverlay() {
                 <Loader2 className="w-20 h-20 animate-spin text-primary mb-4" />
                 <p className="text-2xl font-black uppercase tracking-widest">Scanning World Data</p>
               </motion.div>
-            ) : query.length >= 3 && searchResults.length > 0 ? (
+            ) : searchResults.length > 0 ? (
               searchResults.map((res, idx) => (
                 <motion.button
                   key={res.id}
@@ -87,44 +77,13 @@ export function SearchOverlay() {
                   </div>
                 </motion.button>
               ))
-            ) : showHistory ? (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between px-4">
-                  <h2 className="text-2xl font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-4">
-                    <Clock className="w-6 h-6" /> Search History
-                  </h2>
-                  <Button 
-                    variant="ghost" 
-                    onClick={clearSearchHistory}
-                    className="text-muted-foreground hover:text-destructive gap-2 rounded-xl"
-                  >
-                    <Trash2 className="w-5 h-5" /> Clear
-                  </Button>
-                </div>
-                {searchHistory.map((res, idx) => (
-                  <motion.button
-                    key={'hist-'+res.id + idx}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.02 }}
-                    onClick={() => selectDiscoveredPlace(res)}
-                    className="w-full p-6 rounded-[2rem] bg-zinc-900/50 border border-white/5 hover:bg-zinc-900 flex items-center gap-6 text-left transition-all"
-                  >
-                    <Clock className="w-8 h-8 text-muted-foreground/50" />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-2xl font-bold truncate">{res.label}</h3>
-                      <p className="text-lg text-muted-foreground truncate">{res.address}</p>
-                    </div>
-                  </motion.button>
-                ))}
-              </div>
-            ) : query.length >= 3 ? (
-              <div className="h-full flex flex-col items-center justify-center opacity-50 py-20">
+            ) : query.length > 2 ? (
+              <div className="h-full flex flex-col items-center justify-center opacity-50">
                 <Compass className="w-24 h-24 mb-6" />
                 <p className="text-2xl font-black uppercase tracking-widest text-center">No locations found for "{query}"</p>
               </div>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center opacity-20 py-20">
+              <div className="h-full flex flex-col items-center justify-center opacity-20">
                 <Search className="w-32 h-32 mb-6" />
                 <p className="text-3xl font-black uppercase tracking-[0.5em] text-center">Start Typing to Discover</p>
               </div>

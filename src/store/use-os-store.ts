@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { api } from '@/lib/api-client';
 import type { UserSettings, SavedLocation } from '@shared/types';
-import { fetchRoute, RouteData } from '@/lib/nav-utils';
+import { fetchRoute, RouteData, searchPlaces } from '@/lib/nav-utils';
 import { toast } from 'sonner';
 export type GpsStatus = 'prompt' | 'granted' | 'denied' | 'unsupported';
 export type MapPerspective = 'driving' | 'top-down';
@@ -23,6 +23,11 @@ interface OSState {
   currentHeading: number | null;
   trackingId: string | null;
   isSharingLive: boolean;
+  // Search State
+  searchResults: SavedLocation[];
+  isSearching: boolean;
+  selectedDiscoveredPlace: SavedLocation | null;
+  isSearchOverlayOpen: boolean;
   fetchSettings: () => Promise<void>;
   updateSettings: (patch: Partial<UserSettings>) => Promise<void>;
   toggleMapPerspective: () => void;
@@ -41,6 +46,11 @@ interface OSState {
   stopLiveShare: () => void;
   fetchRecentLocations: () => Promise<void>;
   clearHistory: () => Promise<void>;
+  // Search Actions
+  performSearch: (query: string) => Promise<void>;
+  clearSearch: () => void;
+  setSearchOverlay: (open: boolean) => void;
+  selectDiscoveredPlace: (place: SavedLocation | null) => void;
 }
 export const useOSStore = create<OSState>()(
   persist(
@@ -69,6 +79,10 @@ export const useOSStore = create<OSState>()(
       currentHeading: null,
       trackingId: null,
       isSharingLive: false,
+      searchResults: [],
+      isSearching: false,
+      selectedDiscoveredPlace: null,
+      isSearchOverlayOpen: false,
       fetchSettings: async () => {
         if (get().isInitialized) return;
         set({ isLoading: true });
@@ -82,9 +96,6 @@ export const useOSStore = create<OSState>()(
       updateSettings: async (patch) => {
         const current = get().settings;
         const optimistic = { ...current, ...patch };
-        if (patch.theme && patch.theme !== current.theme) {
-          toast.info(`Switching to ${patch.theme} mode`, { position: 'bottom-center' });
-        }
         set({ settings: optimistic });
         try {
           const data = await api<UserSettings>('/api/settings', {
@@ -132,10 +143,7 @@ export const useOSStore = create<OSState>()(
         try {
           await api('/api/system/reset', { method: 'POST' });
           localStorage.removeItem('velocity-os-storage');
-          toast.success('System reset complete. Reloading...', { position: 'top-center' });
-          setTimeout(() => {
-            window.location.reload();
-          }, 1000);
+          setTimeout(() => window.location.reload(), 1000);
         } catch (err: any) {
           set({ error: err.message, isLoading: false });
           throw err;
@@ -145,35 +153,33 @@ export const useOSStore = create<OSState>()(
         if (!dest) {
           get().updateSettings({ mapPerspective: 'top-down' });
         }
-        set({ isMapOpen: true, isFollowing: true, activeDestination: dest || null });
+        set({ isMapOpen: true, isFollowing: true, activeDestination: dest || null, selectedDiscoveredPlace: null });
         if (dest) {
           get().calculateRoute();
           get().logRecentLocation(dest);
         }
       },
-      closeMap: () => set({ isMapOpen: false, activeDestination: null, activeRoute: null }),
+      closeMap: () => set({ isMapOpen: false, activeDestination: null, activeRoute: null, selectedDiscoveredPlace: null }),
       setFollowing: (isFollowing) => set({ isFollowing }),
       setGpsStatus: (status) => set({ gpsStatus: status }),
       setCurrentPos: (pos, speed, heading, error) => {
         if (error) {
           set({ gpsStatus: 'denied', currentSpeed: 0, currentPos: null, currentHeading: null });
         } else {
-          // HEADING LOCK: Only update currentHeading if a valid number is provided
-          // This prevents "snapping to 0/North" when stationary or signal is lost
           const validHeading = typeof heading === 'number' && !isNaN(heading);
-          set((state) => ({ 
-            currentPos: pos, 
-            currentSpeed: speed, 
-            currentHeading: validHeading ? heading : state.currentHeading, 
-            gpsStatus: 'granted' 
+          set((state) => ({
+            currentPos: pos,
+            currentSpeed: speed,
+            currentHeading: validHeading ? heading : state.currentHeading,
+            gpsStatus: 'granted'
           }));
         }
       },
       calculateRoute: async () => {
         const currentPos = get().currentPos;
-        const activeDestination = get().activeDestination;
-        if (!currentPos || !activeDestination) return;
-        const route = await fetchRoute(currentPos, [activeDestination.lat, activeDestination.lon]);
+        const target = get().activeDestination || get().selectedDiscoveredPlace;
+        if (!currentPos || !target) return;
+        const route = await fetchRoute(currentPos, [target.lat, target.lon]);
         set({ activeRoute: route });
       },
       logRecentLocation: async (loc) => {
@@ -185,8 +191,7 @@ export const useOSStore = create<OSState>()(
           });
           set((s) => {
             const filtered = s.recentLocations.filter(l => l.id !== loc.id);
-            const newList = [updatedLoc, ...filtered].slice(0, 10);
-            return { recentLocations: newList };
+            return { recentLocations: [updatedLoc, ...filtered].slice(0, 10) };
           });
         } catch (err) {
           console.error('Failed to log recent location', err);
@@ -214,6 +219,24 @@ export const useOSStore = create<OSState>()(
       },
       stopLiveShare: () => {
         set({ trackingId: null, isSharingLive: false });
+      },
+      performSearch: async (query) => {
+        if (!query) return set({ searchResults: [] });
+        set({ isSearching: true });
+        try {
+          const results = await searchPlaces(query);
+          set({ searchResults: results, isSearching: false });
+        } catch (e) {
+          set({ isSearching: false });
+        }
+      },
+      clearSearch: () => set({ searchResults: [], isSearching: false }),
+      setSearchOverlay: (open) => set({ isSearchOverlayOpen: open }),
+      selectDiscoveredPlace: (place) => {
+        set({ selectedDiscoveredPlace: place, isSearchOverlayOpen: false, isMapOpen: true, isFollowing: true, activeDestination: null });
+        if (place) {
+          get().calculateRoute();
+        }
       }
     }),
     {

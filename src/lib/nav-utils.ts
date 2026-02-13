@@ -1,9 +1,72 @@
 import { format } from 'date-fns';
+import { SavedLocation } from '@shared/types';
 export interface RouteData {
   coordinates: [number, number][];
   distance: number;
   duration: number;
 }
+export interface NominatimResult {
+  place_id: number;
+  licence: string;
+  osm_type: string;
+  osm_id: number;
+  boundingbox: string[];
+  lat: string;
+  lon: string;
+  display_name: string;
+  class: string;
+  type: string;
+  importance: number;
+  address?: {
+    house_number?: string;
+    road?: string;
+    suburb?: string;
+    city?: string;
+    state?: string;
+    postcode?: string;
+    country?: string;
+  };
+}
+export const searchPlaces = async (query: string): Promise<SavedLocation[]> => {
+  if (!query || query.length < 3) return [];
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=8`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'VelocityOS-CarDash/1.0' }
+    });
+    const data: NominatimResult[] = await response.json();
+    return data.map(item => ({
+      id: `discovered-${item.place_id}`,
+      label: item.display_name.split(',')[0],
+      address: item.display_name,
+      lat: parseFloat(item.lat),
+      lon: parseFloat(item.lon),
+      category: 'favorite', // Default category for results
+    }));
+  } catch (error) {
+    console.error('Search failed:', error);
+    return [];
+  }
+};
+export const reverseGeocode = async (lat: number, lon: number): Promise<Partial<SavedLocation> | null> => {
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'VelocityOS-CarDash/1.0' }
+    });
+    const item: NominatimResult = await response.json();
+    if (!item || !item.display_name) return null;
+    return {
+      label: item.display_name.split(',')[0],
+      address: item.display_name,
+      lat,
+      lon
+    };
+  } catch (error) {
+    console.error('Reverse geocode failed:', error);
+    return null;
+  }
+};
 export const fetchRoute = async (start: [number, number], end: [number, number]): Promise<RouteData | null> => {
   try {
     const response = await fetch(
