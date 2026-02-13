@@ -1,13 +1,13 @@
 import React, { useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useOSStore } from '@/store/use-os-store';
 import { MAP_TILES } from '@/lib/nav-utils';
 import { X, LocateFixed } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
 const UserIcon = L.divIcon({
   className: 'custom-user-icon',
   html: `<div class="w-8 h-8 bg-primary border-4 border-white rounded-full shadow-glow animate-pulse"></div>`,
@@ -25,12 +25,7 @@ function MapContent() {
   const activeDestination = useOSStore((s) => s.activeDestination);
   const locations = useOSStore((s) => s.locations);
 
-  const DefaultIcon = L.icon({
-    iconUrl: markerIcon,
-    shadowUrl: markerShadow,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-  });
+  const DefaultIcon = new L.Icon.Default();
 
   useEffect(() => {
     if (isMapOpen) {
@@ -39,14 +34,17 @@ function MapContent() {
   }, [isMapOpen, map]);
 
   useEffect(() => {
-    map.on('dragstart', () => {
-      setFollowing(false);
+    delete (L.Icon.Default.prototype as any)._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).href,
+      iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).href,
+      shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).href,
     });
+  }, []);
 
-    return () => {
-      map.off('dragstart');
-    };
-  }, [map, setFollowing]);
+  useMapEvents({
+    dragstart: () => setFollowing(false)
+  });
 
   useEffect(() => {
     if (!isFollowing) return;
