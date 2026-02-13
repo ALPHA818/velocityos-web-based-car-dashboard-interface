@@ -14,6 +14,8 @@ import '@/index.css'
 import { HomePage } from '@/pages/HomePage'
 import { NavigationHub } from '@/pages/NavigationHub'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { MediaPage } from '@/pages/MediaPage'
+import { AppsPage } from '@/pages/AppsPage'
 const queryClient = new QueryClient();
 const router = createBrowserRouter([
   {
@@ -29,6 +31,16 @@ const router = createBrowserRouter([
   {
     path: "/settings",
     element: <SettingsPage />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/media",
+    element: <MediaPage />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/apps",
+    element: <AppsPage />,
     errorElement: <RouteErrorBoundary />,
   },
 ]);
