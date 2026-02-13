@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useOSStore } from '@/store/use-os-store';
 import { MAP_TILES } from '@/lib/nav-utils';
@@ -27,11 +27,22 @@ function MapController() {
   const activeRoute = useOSStore((s) => s.activeRoute);
   const isFollowing = useOSStore((s) => s.isFollowing);
   const setFollowing = useOSStore((s) => s.setFollowing);
-  useMapEvents({
-    dragstart: () => {
+  const isMapOpen = useOSStore((s) => s.isMapOpen);
+
+  useEffect(() => {
+    if (isMapOpen) {
+      setTimeout(() => map.invalidateSize(), 150);
+    }
+  }, [isMapOpen]);
+  useEffect(() => {
+    map.on('dragstart', () => {
       setFollowing(false);
-    },
-  });
+    });
+
+    return () => {
+      map.off('dragstart');
+    };
+  }, [map, setFollowing]);
   useEffect(() => {
     if (!isFollowing) return;
     if (activeRoute && activeRoute.coordinates.length > 0) {
@@ -40,7 +51,7 @@ function MapController() {
     } else if (currentPos) {
       map.setView(currentPos, 16, { animate: true });
     }
-  }, [activeRoute, currentPos, isFollowing, map]);
+  }, [activeRoute, currentPos, isFollowing]);
   return null;
 }
 export function MapView() {
@@ -52,7 +63,6 @@ export function MapView() {
   const locations = useOSStore((s) => s.locations);
   const setFollowing = useOSStore((s) => s.setFollowing);
   const isFollowing = useOSStore((s) => s.isFollowing);
-  if (!isMapOpen) return null;
   return (
     <div className="fixed inset-0 z-[100] bg-black">
       <MapContainer

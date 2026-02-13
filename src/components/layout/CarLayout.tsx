@@ -74,13 +74,13 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
       if (currentWakeLock) currentWakeLock.release().catch(() => {});
       navigator.geolocation.clearWatch(watchId);
     };
-  }, [setCurrentPos]);
+  }, [setCurrentPos, openMap, closeMap]);
   return (
     <div className="flex h-screen w-screen bg-black text-foreground overflow-hidden font-sans antialiased">
       {/* Hidden Global Audio Engine */}
       <div className="hidden">
         <ReactPlayer
-          url={track.url}
+          url={track?.url || ''}
           playing={isPlaying}
           volume={volume}
           onProgress={(s) => setProgress(s.played * 100)}
@@ -142,20 +142,14 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
             </motion.div>
           )}
         </AnimatePresence>
-        <AnimatePresence>
-          {isMapOpen && (
-            <motion.div
-              key="map"
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed inset-0 left-28 z-[100]"
-            >
-              <MapView />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <motion.div 
+          className={cn("fixed inset-0 left-28 z-[100]", !isMapOpen && "pointer-events-none")}
+          initial={false}
+          animate={{ y: isMapOpen ? 0 : "100vh" }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+        >
+          <MapView />
+        </motion.div>
       </main>
     </div>
   );
