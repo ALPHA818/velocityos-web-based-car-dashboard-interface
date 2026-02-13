@@ -10,6 +10,7 @@ interface OSState {
   settings: UserSettings;
   locations: SavedLocation[];
   recentLocations: SavedLocation[];
+  searchHistory: SavedLocation[];
   isLoading: boolean;
   isInitialized: boolean;
   error: string | null;
@@ -23,7 +24,6 @@ interface OSState {
   currentHeading: number | null;
   trackingId: string | null;
   isSharingLive: boolean;
-  // Search State
   searchResults: SavedLocation[];
   isSearching: boolean;
   selectedDiscoveredPlace: SavedLocation | null;
@@ -46,11 +46,13 @@ interface OSState {
   stopLiveShare: () => void;
   fetchRecentLocations: () => Promise<void>;
   clearHistory: () => Promise<void>;
-  // Search Actions
   performSearch: (query: string) => Promise<void>;
   clearSearch: () => void;
   setSearchOverlay: (open: boolean) => void;
   selectDiscoveredPlace: (place: SavedLocation | null) => void;
+  fetchSearchHistory: () => Promise<void>;
+  addSearchHistory: (loc: SavedLocation) => Promise<void>;
+  clearSearchHistory: () => Promise<void>;
 }
 export const useOSStore = create<OSState>()(
   persist(
@@ -66,6 +68,7 @@ export const useOSStore = create<OSState>()(
       },
       locations: [],
       recentLocations: [],
+      searchHistory: [],
       isLoading: false,
       isInitialized: false,
       error: null,
@@ -221,7 +224,10 @@ export const useOSStore = create<OSState>()(
         set({ trackingId: null, isSharingLive: false });
       },
       performSearch: async (query) => {
-        if (!query) return set({ searchResults: [] });
+        if (!query) {
+          set({ searchResults: [] });
+          return;
+        }
         set({ isSearching: true });
         try {
           const results = await searchPlaces(query);
@@ -236,6 +242,37 @@ export const useOSStore = create<OSState>()(
         set({ selectedDiscoveredPlace: place, isSearchOverlayOpen: false, isMapOpen: true, isFollowing: true, activeDestination: null });
         if (place) {
           get().calculateRoute();
+          get().addSearchHistory(place);
+        }
+      },
+      fetchSearchHistory: async () => {
+        try {
+          const res = await api<{ items: SavedLocation[] }>('/api/search/history');
+          set({ searchHistory: res.items });
+        } catch (err: any) {
+          console.error('Failed to fetch search history', err);
+        }
+      },
+      addSearchHistory: async (loc) => {
+        try {
+          await api('/api/search/history', {
+            method: 'POST',
+            body: JSON.stringify(loc),
+          });
+          set((s) => {
+            const filtered = s.searchHistory.filter(h => h.id !== loc.id);
+            return { searchHistory: [loc, ...filtered].slice(0, 20) };
+          });
+        } catch (err) {
+          console.error('Failed to add search history', err);
+        }
+      },
+      clearSearchHistory: async () => {
+        try {
+          await api('/api/search/history', { method: 'DELETE' });
+          set({ searchHistory: [] });
+        } catch (err) {
+          console.error('Failed to clear search history', err);
         }
       }
     }),

@@ -4,13 +4,14 @@ import { useOSStore } from '@/store/use-os-store';
 import { Navigation, Star, Share2, X, MapPin, Globe, Compass, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 export function PlaceDetails() {
   const place = useOSStore(s => s.selectedDiscoveredPlace);
   const selectPlace = useOSStore(s => s.selectDiscoveredPlace);
   const addLocation = useOSStore(s => s.addLocation);
   const locations = useOSStore(s => s.locations);
-  const isSaved = locations.some(l => 
-    l.lat.toFixed(5) === place?.lat.toFixed(5) && 
+  const isSaved = locations.some(l =>
+    l.lat.toFixed(5) === place?.lat.toFixed(5) &&
     l.lon.toFixed(5) === place?.lon.toFixed(5)
   );
   const handleSave = async () => {
@@ -73,7 +74,7 @@ export function PlaceDetails() {
               onClick={handleSave}
               className={cn(
                 "h-20 w-20 rounded-3xl transition-all",
-                isSaved ? "bg-green-500/20 text-green-500 border-green-500/30" : "bg-white/5 hover:bg-white/10"
+                isSaved ? "bg-green-500/20 text-green-500 border-green-500/30 shadow-[0_0_20px_rgba(34,197,94,0.3)]" : "bg-white/5 hover:bg-white/10"
               )}
             >
               {isSaved ? <CheckCircle className="w-10 h-10" /> : <Star className="w-10 h-10" />}

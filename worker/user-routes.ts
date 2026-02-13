@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from './core-utils';
-import { UserEntity, SettingsEntity, LocationEntity, TrackingEntity, RecentHistoryEntity } from "./entities";
+import { UserEntity, SettingsEntity, LocationEntity, TrackingEntity, RecentHistoryEntity, SearchHistoryEntity } from "./entities";
 import { ok, bad, notFound } from './core-utils';
 import type { UserSettings, SavedLocation } from "@shared/types";
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
@@ -54,6 +54,26 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     await entity.save({ items: [] });
     return ok(c, { success: true });
   });
+  // SEARCH HISTORY
+  app.get('/api/search/history', async (c) => {
+    const entity = new SearchHistoryEntity(c.env, 'default');
+    const state = await entity.getState();
+    return ok(c, state);
+  });
+  app.post('/api/search/history', async (c) => {
+    const data = await c.req.json<SavedLocation>();
+    const entity = new SearchHistoryEntity(c.env, 'default');
+    await entity.mutate(s => {
+      const filtered = s.items.filter(i => i.id !== data.id);
+      return { items: [data, ...filtered].slice(0, 20) };
+    });
+    return ok(c, { success: true });
+  });
+  app.delete('/api/search/history', async (c) => {
+    const entity = new SearchHistoryEntity(c.env, 'default');
+    await entity.save({ items: [] });
+    return ok(c, { success: true });
+  });
   // TRACKING
   app.get('/api/tracking/:id', async (c) => {
     const entity = new TrackingEntity(c.env, c.req.param('id'));
@@ -78,6 +98,8 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     }
     const recentEntity = new RecentHistoryEntity(c.env, 'default');
     await recentEntity.save({ items: [] });
+    const searchHistoryEntity = new SearchHistoryEntity(c.env, 'default');
+    await searchHistoryEntity.save({ items: [] });
     return ok(c, { reset: true });
   });
   app.get('/api/test', (c) => c.json({ success: true, data: { name: 'VelocityOS Backend' }}));

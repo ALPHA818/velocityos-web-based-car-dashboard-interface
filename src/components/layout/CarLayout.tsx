@@ -37,12 +37,11 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const openMap = useOSStore(s => s.openMap);
   const closeMap = useOSStore(s => s.closeMap);
   const setCurrentPos = useOSStore(s => s.setCurrentPos);
-  const setGpsStatus = useOSStore(s => s.setGpsStatus);
-  const isSharingLive = useOSStore(s => s.isSharingLive);
-  const trackingId = useOSStore(s => s.trackingId);
   const currentPos = useOSStore(s => s.currentPos);
   const currentSpeed = useOSStore(s => s.currentSpeed);
   const gpsStatus = useOSStore(s => s.gpsStatus);
+  const isSharingLive = useOSStore(s => s.isSharingLive);
+  const trackingId = useOSStore(s => s.trackingId);
   const autoTheme = useOSStore(s => s.settings.autoTheme);
   const updateSettings = useOSStore(s => s.updateSettings);
   const activeDestination = useOSStore(s => s.activeDestination);
@@ -93,7 +92,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setCurrentPos([pos.coords.latitude, pos.coords.longitude], pos.coords.speed, pos.coords.heading),
-      (err) => { if (err.code === err.PERMISSION_DENIED) setCurrentPos(null, 0, null, true); },
+      (err) => { if (err.code === 1) setCurrentPos(null, 0, null, true); },
       { enableHighAccuracy: true }
     );
     let wakeLock: any = null;
@@ -106,7 +105,6 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen w-screen bg-black text-foreground overflow-hidden font-sans antialiased">
       <div className="hidden">
-        {/* ReactPlayer with forced type casting to resolve type errors */}
         <ReactPlayer
           url={track?.url || ''}
           playing={isPlaying && isPlayerReady}
@@ -139,8 +137,8 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
           <NavButton icon={Settings} isActive={location.pathname === '/settings' && !isMapOpen} onClick={() => { closeMap(); navigate('/settings'); }} />
         </div>
       </nav>
-      <main className="flex-1 overflow-y-auto relative p-10 bg-gradient-to-br from-zinc-950 to-black">
-        <div className="max-w-7xl mx-auto h-full">
+      <main className="flex-1 overflow-y-auto relative bg-gradient-to-br from-zinc-950 to-black">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-10 lg:py-12 h-full">
           <AnimatePresence mode="wait">
             {!isMapOpen && (
               <motion.div key="content" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">

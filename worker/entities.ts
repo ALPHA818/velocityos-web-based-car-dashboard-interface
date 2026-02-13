@@ -32,12 +32,16 @@ export class LocationEntity extends IndexedEntity<SavedLocation> {
     category: "favorite"
   };
 }
-export interface RecentLocationState {
-  items: SavedLocation[];
+export interface GenericListState<T> {
+  items: T[];
 }
-export class RecentHistoryEntity extends Entity<RecentLocationState> {
+export class RecentHistoryEntity extends Entity<GenericListState<SavedLocation>> {
   static readonly entityName = "recent-history";
-  static readonly initialState: RecentLocationState = { items: [] };
+  static readonly initialState: GenericListState<SavedLocation> = { items: [] };
+}
+export class SearchHistoryEntity extends Entity<GenericListState<SavedLocation>> {
+  static readonly entityName = "search-history";
+  static readonly initialState: GenericListState<SavedLocation> = { items: [] };
 }
 export interface TrackingState {
   lat: number;
