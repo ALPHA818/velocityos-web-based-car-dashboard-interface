@@ -1,4 +1,4 @@
-import { IndexedEntity } from "./core-utils";
+import { IndexedEntity, Entity } from "./core-utils";
 import type { User, Chat, ChatMessage, UserSettings, SavedLocation } from "@shared/types";
 import { MOCK_CHAT_MESSAGES, MOCK_CHATS, MOCK_USERS } from "@shared/mock-data";
 export class UserEntity extends IndexedEntity<User> {
@@ -27,6 +27,30 @@ export class LocationEntity extends IndexedEntity<SavedLocation> {
     lat: 0,
     lon: 0,
     category: "favorite"
+  };
+}
+export interface RecentLocationState {
+  items: SavedLocation[];
+}
+export class RecentHistoryEntity extends Entity<RecentLocationState> {
+  static readonly entityName = "recent-history";
+  static readonly initialState: RecentLocationState = { items: [] };
+}
+export interface TrackingState {
+  lat: number;
+  lon: number;
+  speed: number;
+  heading: number;
+  lastUpdate: number;
+}
+export class TrackingEntity extends Entity<TrackingState> {
+  static readonly entityName = "tracking";
+  static readonly initialState: TrackingState = {
+    lat: 0,
+    lon: 0,
+    speed: 0,
+    heading: 0,
+    lastUpdate: 0
   };
 }
 export type ChatBoardState = Chat & { messages: ChatMessage[] };

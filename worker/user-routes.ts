@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from './core-utils';
-import { UserEntity, SettingsEntity, LocationEntity } from "./entities";
-import { ok, bad } from './core-utils';
+import { UserEntity, SettingsEntity, LocationEntity, TrackingEntity, RecentHistoryEntity } from "./entities";
+import { ok, bad, notFound } from './core-utils';
 import type { UserSettings, SavedLocation } from "@shared/types";
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
   // SETTINGS
@@ -34,19 +34,51 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     const deleted = await LocationEntity.delete(c.env, c.req.param('id'));
     return ok(c, { deleted });
   });
+  // RECENT LOCATIONS
+  app.get('/api/locations/recent', async (c) => {
+    const entity = new RecentHistoryEntity(c.env, 'default');
+    const state = await entity.getState();
+    return ok(c, state);
+  });
+  app.post('/api/locations/recent', async (c) => {
+    const data = await c.req.json<SavedLocation>();
+    const entity = new RecentHistoryEntity(c.env, 'default');
+    await entity.mutate(s => {
+      const filtered = s.items.filter(i => i.id !== data.id);
+      return { items: [data, ...filtered].slice(0, 10) };
+    });
+    return ok(c, { success: true });
+  });
+  app.delete('/api/locations/recent', async (c) => {
+    const entity = new RecentHistoryEntity(c.env, 'default');
+    await entity.save({ items: [] });
+    return ok(c, { success: true });
+  });
+  // TRACKING
+  app.get('/api/tracking/:id', async (c) => {
+    const entity = new TrackingEntity(c.env, c.req.param('id'));
+    if (!await entity.exists()) return notFound(c, 'Tracking session not found');
+    const state = await entity.getState();
+    return ok(c, state);
+  });
+  app.post('/api/tracking/:id', async (c) => {
+    const data = await c.req.json<any>();
+    const entity = new TrackingEntity(c.env, c.req.param('id'));
+    await entity.save({ ...data, lastUpdate: Date.now() });
+    return ok(c, { success: true });
+  });
   // SYSTEM
   app.post('/api/system/reset', async (c) => {
-    // Reset Settings
     const settingsEntity = new SettingsEntity(c.env, 'default');
     await settingsEntity.save(SettingsEntity.initialState);
-    // Clear Locations
     const locations = await LocationEntity.list(c.env);
     const ids = locations.items.map(l => l.id);
     if (ids.length > 0) {
       await LocationEntity.deleteMany(c.env, ids);
     }
+    const recentEntity = new RecentHistoryEntity(c.env, 'default');
+    await recentEntity.save({ items: [] });
     return ok(c, { reset: true });
   });
-  // LEGACY ROUTES
   app.get('/api/test', (c) => c.json({ success: true, data: { name: 'VelocityOS Backend' }}));
 }

@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 export interface RouteData {
   coordinates: [number, number][];
   distance: number;
@@ -24,6 +25,19 @@ export const fetchRoute = async (start: [number, number], end: [number, number])
   }
 };
 export const MAP_TILES = {
-  url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
   attribution: '&copy; OpenStreetMap &copy; CARTO',
+};
+export const getCategoryColor = (category: string) => {
+  switch (category) {
+    case 'home': return '#3b82f6';
+    case 'work': return '#6366f1';
+    case 'favorite': return '#f59e0b';
+    case 'recent': return '#10b981';
+    default: return '#71717a';
+  }
+};
+export const formatETA = (durationSeconds: number): string => {
+  const arrivalDate = new Date(Date.now() + durationSeconds * 1000);
+  return format(arrivalDate, 'hh:mm a');
 };

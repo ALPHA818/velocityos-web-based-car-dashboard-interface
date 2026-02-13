@@ -16,8 +16,8 @@ import { NavigationHub } from '@/pages/NavigationHub'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { MediaPage } from '@/pages/MediaPage'
 import { AppsPage } from '@/pages/AppsPage'
+import { TrackingPage } from '@/pages/TrackingPage'
 const queryClient = new QueryClient();
-
 // Register Service Worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -26,7 +26,6 @@ if ('serviceWorker' in navigator) {
       .catch(err => console.error('SW registration failed', err));
   });
 }
-
 const router = createBrowserRouter([
   {
     path: "/",
@@ -51,6 +50,11 @@ const router = createBrowserRouter([
   {
     path: "/apps",
     element: <AppsPage />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/track/:id",
+    element: <TrackingPage />,
     errorElement: <RouteErrorBoundary />,
   },
 ]);

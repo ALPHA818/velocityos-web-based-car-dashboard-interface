@@ -6,6 +6,7 @@ import { fetchRoute, RouteData } from '@/lib/nav-utils';
 interface OSState {
   settings: UserSettings;
   locations: SavedLocation[];
+  recentLocations: SavedLocation[];
   isLoading: boolean;
   error: string | null;
   // Navigation State
@@ -15,6 +16,9 @@ interface OSState {
   activeRoute: RouteData | null;
   currentPos: [number, number] | null;
   currentSpeed: number | null;
+  // Tracking
+  trackingId: string | null;
+  isSharingLive: boolean;
   fetchSettings: () => Promise<void>;
   updateSettings: (patch: Partial<UserSettings>) => Promise<void>;
   fetchLocations: () => Promise<void>;
@@ -27,6 +31,12 @@ interface OSState {
   setFollowing: (following: boolean) => void;
   setCurrentPos: (pos: [number, number], speed: number | null) => void;
   calculateRoute: () => Promise<void>;
+  // Phase 8 Actions
+  logRecentLocation: (loc: SavedLocation) => Promise<void>;
+  startLiveShare: () => void;
+  stopLiveShare: () => void;
+  fetchRecentLocations: () => Promise<void>;
+  clearHistory: () => Promise<void>;
 }
 export const useOSStore = create<OSState>()(
   persist(
@@ -38,6 +48,7 @@ export const useOSStore = create<OSState>()(
         theme: 'dark',
       },
       locations: [],
+      recentLocations: [],
       isLoading: false,
       error: null,
       isMapOpen: false,
@@ -46,6 +57,8 @@ export const useOSStore = create<OSState>()(
       activeRoute: null,
       currentPos: null,
       currentSpeed: null,
+      trackingId: null,
+      isSharingLive: false,
       fetchSettings: async () => {
         set({ isLoading: true });
         try {
@@ -103,12 +116,15 @@ export const useOSStore = create<OSState>()(
           set({
             settings: { id: 'default', units: 'mph', mapProvider: 'google', theme: 'dark' },
             locations: [],
+            recentLocations: [],
             isLoading: false,
             error: null,
             isMapOpen: false,
             isFollowing: true,
             activeDestination: null,
-            activeRoute: null
+            activeRoute: null,
+            isSharingLive: false,
+            trackingId: null
           });
           localStorage.removeItem('velocity-os-storage');
         } catch (err: any) {
@@ -120,6 +136,7 @@ export const useOSStore = create<OSState>()(
         set({ isMapOpen: true, isFollowing: true, activeDestination: dest || null });
         if (dest) {
           get().calculateRoute();
+          get().logRecentLocation(dest);
         }
       },
       closeMap: () => set({ isMapOpen: false, activeDestination: null, activeRoute: null }),
@@ -130,11 +147,53 @@ export const useOSStore = create<OSState>()(
         if (!currentPos || !activeDestination) return;
         const route = await fetchRoute(currentPos, [activeDestination.lat, activeDestination.lon]);
         set({ activeRoute: route });
+      },
+      logRecentLocation: async (loc) => {
+        try {
+          const updatedLoc = { ...loc, lastUsedAt: Date.now() };
+          await api('/api/locations/recent', {
+            method: 'POST',
+            body: JSON.stringify(updatedLoc),
+          });
+          set((s) => {
+            const filtered = s.recentLocations.filter(l => l.id !== loc.id);
+            const newList = [updatedLoc, ...filtered].slice(0, 10);
+            return { recentLocations: newList };
+          });
+        } catch (err) {
+          console.error('Failed to log recent location', err);
+        }
+      },
+      fetchRecentLocations: async () => {
+        try {
+          const res = await api<{ items: SavedLocation[] }>('/api/locations/recent');
+          set({ recentLocations: res.items });
+        } catch (err: any) {
+          set({ error: err.message });
+        }
+      },
+      clearHistory: async () => {
+        try {
+          await api('/api/locations/recent', { method: 'DELETE' });
+          set({ recentLocations: [] });
+        } catch (err: any) {
+          set({ error: err.message });
+        }
+      },
+      startLiveShare: () => {
+        const id = crypto.randomUUID();
+        set({ trackingId: id, isSharingLive: true });
+      },
+      stopLiveShare: () => {
+        set({ trackingId: null, isSharingLive: false });
       }
     }),
     {
       name: 'velocity-os-storage',
-      partialize: (state) => ({ settings: state.settings }),
+      partialize: (state) => ({ 
+        settings: state.settings,
+        recentLocations: state.recentLocations 
+      }),
     }
   )
 );

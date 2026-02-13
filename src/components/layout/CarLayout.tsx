@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import ReactPlayer from 'react-player';
 import { Home, Map, Music, Grid, Settings, Wifi, Battery } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -37,6 +37,10 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const openMap = useOSStore((s) => s.openMap);
   const closeMap = useOSStore((s) => s.closeMap);
   const setCurrentPos = useOSStore((s) => s.setCurrentPos);
+  const isSharingLive = useOSStore((s) => s.isSharingLive);
+  const trackingId = useOSStore((s) => s.trackingId);
+  const currentPos = useOSStore((s) => s.currentPos);
+  const currentSpeed = useOSStore((s) => s.currentSpeed);
   const isPlaying = useMediaStore((s) => s.isPlaying);
   const currentTrackIndex = useMediaStore((s) => s.currentTrackIndex);
   const volume = useMediaStore((s) => s.volume);
@@ -44,10 +48,40 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const setDuration = useMediaStore((s) => s.setDuration);
   const track = getTrack(currentTrackIndex);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const trackIntervalRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
+  useEffect(() => {
+    if (isSharingLive && trackingId && currentPos) {
+      if (!trackIntervalRef.current) {
+        trackIntervalRef.current = setInterval(async () => {
+          try {
+            await fetch(`/api/tracking/${trackingId}`, {
+              method: 'POST',
+              body: JSON.stringify({
+                lat: currentPos[0],
+                lon: currentPos[1],
+                speed: currentSpeed || 0,
+                heading: 0
+              })
+            });
+          } catch (e) {
+            console.error('Failed to send tracking update', e);
+          }
+        }, 10000);
+      }
+    } else {
+      if (trackIntervalRef.current) {
+        clearInterval(trackIntervalRef.current);
+        trackIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (trackIntervalRef.current) clearInterval(trackIntervalRef.current);
+    };
+  }, [isSharingLive, trackingId, currentPos, currentSpeed]);
   useEffect(() => {
     let currentWakeLock: any = null;
     const handleVisibilityChange = async () => {
@@ -77,7 +111,6 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   }, [setCurrentPos]);
   return (
     <div className="flex h-screen w-screen bg-black text-foreground overflow-hidden font-sans antialiased">
-      {/* Hidden Global Audio Engine */}
       <div className="hidden">
         <ReactPlayer
           url={track?.url || ''}
