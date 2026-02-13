@@ -1,6 +1,6 @@
 # Cloudflare Workers Chat Demo
 
-[![[cloudflarebutton]]](https://deploy.workers.cloudflare.com)
+[![[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ALPHA818/velocityos-web-based-car-dashboard-interface)]](https://deploy.workers.cloudflare.com)
 
 A production-ready full-stack chat application built on Cloudflare Workers. Features user management, chat boards, and real-time messaging using Durable Objects for scalable, stateful storage. React frontend with modern UI components, Tailwind CSS, and TanStack Query for data fetching.
 
@@ -101,7 +101,7 @@ curl -X POST http://localhost:8787/api/chats -H "Content-Type: application/json"
    ```
    Deploys Worker + static assets. SPA routing handled automatically.
 
-[![[cloudflarebutton]]](https://deploy.workers.cloudflare.com)
+[![[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ALPHA818/velocityos-web-based-car-dashboard-interface)]](https://deploy.workers.cloudflare.com)
 
 **Custom Domain**: Update `wrangler.jsonc` with `routes` and run `bun deploy`.
 
