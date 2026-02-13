@@ -14,8 +14,9 @@ export class SettingsEntity extends IndexedEntity<UserSettings> {
     id: "default",
     units: "mph",
     mapProvider: "google",
-    mapTheme: "vibrant",
-    theme: "dark"
+    mapTheme: "highway",
+    theme: "dark",
+    autoTheme: true,
   };
 }
 export class LocationEntity extends IndexedEntity<SavedLocation> {

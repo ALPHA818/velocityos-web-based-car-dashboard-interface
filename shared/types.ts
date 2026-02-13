@@ -8,11 +8,12 @@ export interface User {
   name: string;
 }
 export interface UserSettings {
-  id: string; // usually 'default' or userId
+  id: string; 
   units: 'mph' | 'kph';
   mapProvider: 'google' | 'waze';
-  mapTheme: 'light' | 'dark' | 'vibrant';
+  mapTheme: 'light' | 'dark' | 'vibrant' | 'highway';
   theme: 'dark' | 'light';
+  autoTheme: boolean;
 }
 export type LocationCategory = 'home' | 'work' | 'favorite' | 'recent';
 export interface SavedLocation {
@@ -40,5 +41,5 @@ export interface ChatMessage {
   chatId: string;
   userId: string;
   text: string;
-  ts: number; // epoch millis
+  ts: number;
 }

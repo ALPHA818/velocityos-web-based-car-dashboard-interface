@@ -43,6 +43,8 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const currentPos = useOSStore((s) => s.currentPos);
   const currentSpeed = useOSStore((s) => s.currentSpeed);
   const gpsStatus = useOSStore((s) => s.gpsStatus);
+  const autoTheme = useOSStore((s) => s.settings.autoTheme);
+  const updateSettings = useOSStore((s) => s.updateSettings);
   const isPlaying = useMediaStore((s) => s.isPlaying);
   const currentTrackIndex = useMediaStore((s) => s.currentTrackIndex);
   const volume = useMediaStore((s) => s.volume);
@@ -52,9 +54,24 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const [currentTime, setCurrentTime] = useState(new Date());
   const trackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    const timer = setInterval(() => {
+      const now = new Date();
+      setCurrentTime(now);
+      // Auto Theme Logic
+      if (autoTheme) {
+        const hour = now.getHours();
+        const isNight = hour >= 18 || hour < 6;
+        const targetTheme = isNight ? 'dark' : 'light';
+        const targetMapTheme = isNight ? 'highway' : 'light';
+        // Only update if different
+        const currentSettings = useOSStore.getState().settings;
+        if (currentSettings.theme !== targetTheme || currentSettings.mapTheme !== targetMapTheme) {
+          updateSettings({ theme: targetTheme, mapTheme: targetMapTheme as any });
+        }
+      }
+    }, 60000);
     return () => clearInterval(timer);
-  }, []);
+  }, [autoTheme, updateSettings]);
   useEffect(() => {
     if (isSharingLive && trackingId && currentPos && gpsStatus === 'granted') {
       if (!trackIntervalRef.current) {
@@ -115,7 +132,6 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setCurrentPos([pos.coords.latitude, pos.coords.longitude], pos.coords.speed),
       (err) => {
-        // Silently handle permission policy errors in store to avoid repeated console warnings
         if (err.code === err.PERMISSION_DENIED) {
           setCurrentPos(null, 0, true);
         }
@@ -171,7 +187,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
         />
         <div className="mt-auto space-y-6 flex flex-col items-center">
           <div className="text-center">
-            <div className="text-lg font-bold tabular-nums">{format(currentTime, 'HH:mm')}</div>
+            <div className="text-2xl font-black tabular-nums">{format(currentTime, 'HH:mm')}</div>
           </div>
           <NavButton
             icon={Settings}
@@ -181,19 +197,21 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
       <main className="flex-1 overflow-y-auto relative p-10 bg-gradient-to-br from-zinc-950 to-black">
-        <AnimatePresence mode="wait">
-          {!isMapOpen && (
-            <motion.div
-              key="content"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="h-full"
-            >
-              {children}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div className="max-w-7xl mx-auto h-full">
+          <AnimatePresence mode="wait">
+            {!isMapOpen && (
+              <motion.div
+                key="content"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="h-full"
+              >
+                {children}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
         <div className={cn("fixed inset-0 left-28 z-[100] transition-all duration-500 ease-out transform", !isMapOpen ? "pointer-events-none translate-y-full" : "translate-y-0")}>
           <MapView />
         </div>

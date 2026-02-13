@@ -35,20 +35,23 @@ export const MAP_THEMES = {
   },
   vibrant: {
     url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    filter: 'invert(1) hue-rotate(240deg) brightness(0.8) contrast(1.2) saturate(1.5)'
+    filter: 'brightness(1.1) contrast(1.4) saturate(1.3)'
+  },
+  highway: {
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png',
+    filter: 'brightness(1.2) contrast(1.6) saturate(1.5)'
   }
 };
-export const MAP_TILES = MAP_THEMES.vibrant; // Default fallback
 export const getCategoryColor = (category: string) => {
   switch (category) {
-    case 'home': return '#3b82f6';
-    case 'work': return '#6366f1';
-    case 'favorite': return '#f59e0b';
-    case 'recent': return '#10b981';
-    default: return '#71717a';
+    case 'home': return '#60a5fa'; // Bright Electric Blue
+    case 'work': return '#a78bfa'; // Bright Purple
+    case 'favorite': return '#fbbf24'; // Bright Amber
+    case 'recent': return '#34d399'; // Bright Lime/Emerald
+    default: return '#9ca3af';
   }
 };
 export const formatETA = (durationSeconds: number): string => {
   const arrivalDate = new Date(Date.now() + durationSeconds * 1000);
-  return format(arrivalDate, 'hh:mm a');
+  return format(arrivalDate, 'hh:mm:ss a');
 };

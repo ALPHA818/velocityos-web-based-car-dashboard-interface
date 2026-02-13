@@ -44,8 +44,9 @@ export const useOSStore = create<OSState>()(
         id: 'default',
         units: 'mph',
         mapProvider: 'google',
-        mapTheme: 'vibrant',
+        mapTheme: 'highway',
         theme: 'dark',
+        autoTheme: true,
       },
       locations: [],
       recentLocations: [],
@@ -115,7 +116,7 @@ export const useOSStore = create<OSState>()(
         try {
           await api('/api/system/reset', { method: 'POST' });
           set({
-            settings: { id: 'default', units: 'mph', mapProvider: 'google', mapTheme: 'vibrant', theme: 'dark' },
+            settings: { id: 'default', units: 'mph', mapProvider: 'google', mapTheme: 'highway', theme: 'dark', autoTheme: true },
             locations: [],
             recentLocations: [],
             isLoading: false,
