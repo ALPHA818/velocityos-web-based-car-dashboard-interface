@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 export type GpsStatus = 'prompt' | 'granted' | 'denied' | 'unsupported';
 export type MapPerspective = 'driving' | 'top-down';
 interface OSState {
-  settings: UserSettings & { mapPerspective?: MapPerspective };
+  settings: UserSettings;
   locations: SavedLocation[];
   recentLocations: SavedLocation[];
   isLoading: boolean;
@@ -16,7 +16,6 @@ interface OSState {
   gpsStatus: GpsStatus;
   isMapOpen: boolean;
   isFollowing: boolean;
-  mapPerspective: MapPerspective;
   activeDestination: SavedLocation | null;
   activeRoute: RouteData | null;
   currentPos: [number, number] | null;
@@ -25,7 +24,7 @@ interface OSState {
   trackingId: string | null;
   isSharingLive: boolean;
   fetchSettings: () => Promise<void>;
-  updateSettings: (patch: Partial<UserSettings & { mapPerspective?: MapPerspective }>) => Promise<void>;
+  updateSettings: (patch: Partial<UserSettings>) => Promise<void>;
   toggleMapPerspective: () => void;
   fetchLocations: () => Promise<void>;
   addLocation: (loc: Omit<SavedLocation, 'id'>) => Promise<void>;
@@ -53,6 +52,7 @@ export const useOSStore = create<OSState>()(
         mapTheme: 'highway',
         theme: 'dark',
         autoTheme: true,
+        mapPerspective: 'top-down',
       },
       locations: [],
       recentLocations: [],
@@ -62,7 +62,6 @@ export const useOSStore = create<OSState>()(
       gpsStatus: 'prompt',
       isMapOpen: false,
       isFollowing: true,
-      mapPerspective: 'driving',
       activeDestination: null,
       activeRoute: null,
       currentPos: null,
@@ -92,13 +91,14 @@ export const useOSStore = create<OSState>()(
             method: 'POST',
             body: JSON.stringify(patch),
           });
-          set({ settings: { ...data, mapPerspective: optimistic.mapPerspective } });
+          set({ settings: data });
         } catch (err: any) {
           set({ error: err.message, settings: current });
         }
       },
       toggleMapPerspective: () => {
-        set((s) => ({ mapPerspective: s.mapPerspective === 'driving' ? 'top-down' : 'driving' }));
+        const current = get().settings.mapPerspective;
+        get().updateSettings({ mapPerspective: current === 'driving' ? 'top-down' : 'driving' });
       },
       fetchLocations: async () => {
         try {
@@ -142,6 +142,10 @@ export const useOSStore = create<OSState>()(
         }
       },
       openMap: (dest) => {
+        // If no specific destination, default to top-down for overview
+        if (!dest) {
+          get().updateSettings({ mapPerspective: 'top-down' });
+        }
         set({ isMapOpen: true, isFollowing: true, activeDestination: dest || null });
         if (dest) {
           get().calculateRoute();
@@ -153,7 +157,7 @@ export const useOSStore = create<OSState>()(
       setGpsStatus: (status) => set({ gpsStatus: status }),
       setCurrentPos: (pos, speed, heading, error) => {
         if (error) {
-          set({ gpsStatus: 'denied', currentSpeed: 0 });
+          set({ gpsStatus: 'denied', currentSpeed: 0, currentPos: null, currentHeading: null });
         } else {
           set({ currentPos: pos, currentSpeed: speed, currentHeading: heading ?? null, gpsStatus: 'granted' });
         }
@@ -209,8 +213,7 @@ export const useOSStore = create<OSState>()(
       name: 'velocity-os-storage',
       partialize: (state) => ({
         settings: state.settings,
-        recentLocations: state.recentLocations,
-        mapPerspective: state.mapPerspective
+        recentLocations: state.recentLocations
       }),
     }
   )

@@ -17,6 +17,7 @@ export class SettingsEntity extends IndexedEntity<UserSettings> {
     mapTheme: "highway",
     theme: "dark",
     autoTheme: true,
+    mapPerspective: "top-down",
   };
 }
 export class LocationEntity extends IndexedEntity<SavedLocation> {

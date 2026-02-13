@@ -1,7 +1,7 @@
 import React from 'react';
 import { CarLayout } from '@/components/layout/CarLayout';
 import { useOSStore } from '@/store/use-os-store';
-import { Ruler, Map, LogOut, Info, Download, CheckCircle, XCircle, Sun, Moon, Sparkles, Navigation, Zap } from 'lucide-react';
+import { Ruler, LogOut, Info, Download, CheckCircle, XCircle, Sun, Moon, Sparkles, Navigation, Zap, Globe, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -22,8 +22,8 @@ import {
 import { toast } from 'sonner';
 export function SettingsPage() {
   const units = useOSStore((s) => s.settings.units);
-  const mapProvider = useOSStore((s) => s.settings.mapProvider);
   const mapTheme = useOSStore((s) => s.settings.mapTheme);
+  const mapPerspective = useOSStore((s) => s.settings.mapPerspective);
   const autoTheme = useOSStore((s) => s.settings.autoTheme);
   const gpsStatus = useOSStore((s) => s.gpsStatus);
   const updateSettings = useOSStore((s) => s.updateSettings);
@@ -55,8 +55,8 @@ export function SettingsPage() {
                   <p className="text-lg text-muted-foreground">Switch day/night theme automatically based on time</p>
                 </div>
               </div>
-              <Switch 
-                checked={autoTheme} 
+              <Switch
+                checked={autoTheme}
                 onCheckedChange={(val) => updateSettings({ autoTheme: val })}
                 className="scale-150 mr-4"
               />
@@ -64,8 +64,40 @@ export function SettingsPage() {
           </section>
           <section className="dashboard-card space-y-8">
             <div className="flex items-center gap-6">
+              <Layers className="w-12 h-12 text-primary" />
+              <h2 className="text-3xl font-bold">Navigation Perspective</h2>
+            </div>
+            <RadioGroup
+              value={mapPerspective}
+              onValueChange={(val) => updateSettings({ mapPerspective: val as any })}
+              className="grid grid-cols-2 gap-6"
+            >
+              {[
+                { id: 'driving', label: 'Driving', icon: Navigation, desc: '3D Pitched view' },
+                { id: 'top-down', label: 'Top-Down', icon: Globe, desc: 'North-up overview' },
+              ].map((p) => (
+                <Label
+                  key={p.id}
+                  htmlFor={p.id}
+                  className={cn(
+                    "flex flex-col items-center justify-center h-48 rounded-[2.5rem] border-4 transition-all cursor-pointer gap-3",
+                    mapPerspective === p.id ? 'border-primary bg-primary/10 shadow-glow' : 'border-white/5 bg-white/5'
+                  )}
+                >
+                  <RadioGroupItem value={p.id} id={p.id} className="sr-only" />
+                  <p.icon className={cn("w-14 h-14", mapPerspective === p.id ? "text-primary" : "text-muted-foreground")} />
+                  <div className="text-center">
+                    <span className="text-xl font-black uppercase tracking-widest block">{p.label}</span>
+                    <span className="text-xs text-muted-foreground uppercase font-bold tracking-tighter opacity-60">{p.desc}</span>
+                  </div>
+                </Label>
+              ))}
+            </RadioGroup>
+          </section>
+          <section className="dashboard-card space-y-8">
+            <div className="flex items-center gap-6">
               <Sparkles className="w-12 h-12 text-primary" />
-              <h2 className="text-3xl font-bold">Map Visibility</h2>
+              <h2 className="text-3xl font-bold">Map Visual Style</h2>
             </div>
             <RadioGroup
               value={mapTheme}
@@ -191,7 +223,7 @@ export function SettingsPage() {
         <footer className="text-center text-muted-foreground flex flex-col items-center justify-center gap-4 opacity-40 pb-12">
           <div className="flex items-center gap-3">
              <Info className="w-6 h-6" />
-             <span className="text-lg uppercase font-black tracking-[0.4em]">VelocityOS Engine v1.1.2 Production</span>
+             <span className="text-lg uppercase font-black tracking-[0.4em]">VelocityOS Engine v1.2.0 Production</span>
           </div>
           <p className="text-sm font-medium">© 2025 Booster Systems Inc. | Safety First Protocol Active</p>
         </footer>

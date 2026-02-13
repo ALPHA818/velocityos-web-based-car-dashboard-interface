@@ -8,12 +8,13 @@ export interface User {
   name: string;
 }
 export interface UserSettings {
-  id: string; 
+  id: string;
   units: 'mph' | 'kph';
   mapProvider: 'google' | 'waze';
   mapTheme: 'light' | 'dark' | 'vibrant' | 'highway';
   theme: 'dark' | 'light';
   autoTheme: boolean;
+  mapPerspective: 'driving' | 'top-down';
 }
 export type LocationCategory = 'home' | 'work' | 'favorite' | 'recent';
 export interface SavedLocation {

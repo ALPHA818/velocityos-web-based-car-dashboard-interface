@@ -5,7 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useOSStore } from '@/store/use-os-store';
 import { getCategoryColor, formatETA, getMapStyle, getMapFilter } from '@/lib/nav-utils';
 import type { GeoJSON } from 'geojson';
-import { X, Navigation, Share2, Compass, Layers } from 'lucide-react';
+import { X, Navigation, Share2, Compass, Globe, Map as MapIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TrackingOverlay } from './TrackingOverlay';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,7 +18,7 @@ export function MapView() {
   const setFollowing = useOSStore((s) => s.setFollowing);
   const isSharingLive = useOSStore((s) => s.isSharingLive);
   const mapTheme = useOSStore((s) => s.settings.mapTheme);
-  const mapPerspective = useOSStore((s) => s.mapPerspective);
+  const mapPerspective = useOSStore((s) => s.settings.mapPerspective);
   const toggleMapPerspective = useOSStore((s) => s.toggleMapPerspective);
   const currentPos = useOSStore((s) => s.currentPos);
   const currentHeading = useOSStore((s) => s.currentHeading);
@@ -26,7 +26,7 @@ export function MapView() {
   const mapRef = useRef<any>(null);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showShare, setShowShare] = React.useState(false);
-  // Sync Map View Perspective
+  // Sync Map View Perspective & Position
   useEffect(() => {
     if (isMapOpen && currentPos && isFollowing && mapRef.current) {
       const isDriving = mapPerspective === 'driving';
@@ -36,7 +36,7 @@ export function MapView() {
         pitch: isDriving ? 60 : 0,
         bearing: isDriving ? (currentHeading ?? 0) : 0,
         essential: true,
-        duration: 1000 // Optimized for GPS polling interval
+        duration: 1200
       });
     }
   }, [currentPos, currentHeading, isFollowing, isMapOpen, mapPerspective]);
@@ -48,7 +48,6 @@ export function MapView() {
       canvas.style.filter = getMapFilter(mapTheme);
     }
   }, [mapTheme, isMapOpen]);
-  // Handle offline/online status
   useEffect(() => {
     const handleStatus = () => {
       const map = mapRef.current?.getMap();
@@ -203,16 +202,33 @@ export function MapView() {
       </div>
       <div className="absolute bottom-10 right-10 z-[110] flex flex-col gap-6">
          <Button
-          variant="secondary"
+          variant={mapPerspective === 'top-down' ? "default" : "secondary"}
           size="lg"
-          className="h-24 w-24 rounded-[2.5rem] bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow-lg active:scale-90 transition-all"
-          onClick={toggleMapPerspective}
+          title="Top-Down Overview"
+          className={cn(
+            "h-24 w-24 rounded-[2.5rem] backdrop-blur-3xl border border-white/10 transition-all shadow-glow-lg active:scale-90",
+            mapPerspective === 'top-down' ? "bg-primary text-white" : "bg-zinc-950/90 text-muted-foreground"
+          )}
+          onClick={() => toggleMapPerspective()}
         >
-          {mapPerspective === 'driving' ? <Layers className="w-12 h-12" /> : <Navigation className="w-12 h-12" />}
+          <Globe className="w-12 h-12" />
+        </Button>
+         <Button
+          variant={mapPerspective === 'driving' ? "default" : "secondary"}
+          size="lg"
+          title="Driving Perspective"
+          className={cn(
+            "h-24 w-24 rounded-[2.5rem] backdrop-blur-3xl border border-white/10 transition-all shadow-glow-lg active:scale-90",
+            mapPerspective === 'driving' ? "bg-primary text-white" : "bg-zinc-950/90 text-muted-foreground"
+          )}
+          onClick={() => toggleMapPerspective()}
+        >
+          <Navigation className="w-12 h-12" />
         </Button>
          <Button
           variant={isFollowing ? "default" : "secondary"}
           size="lg"
+          title="Recenter Map"
           className={cn(
             "h-24 w-24 rounded-[2.5rem] backdrop-blur-3xl border border-white/10 transition-all shadow-glow-lg active:scale-90",
             isFollowing ? "bg-primary" : "bg-zinc-950/90"
