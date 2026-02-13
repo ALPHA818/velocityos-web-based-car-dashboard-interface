@@ -74,7 +74,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
       if (currentWakeLock) currentWakeLock.release().catch(() => {});
       navigator.geolocation.clearWatch(watchId);
     };
-  }, [setCurrentPos, openMap, closeMap]);
+  }, [setCurrentPos]);
   return (
     <div className="flex h-screen w-screen bg-black text-foreground overflow-hidden font-sans antialiased">
       {/* Hidden Global Audio Engine */}
@@ -142,14 +142,9 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
             </motion.div>
           )}
         </AnimatePresence>
-        <motion.div 
-          className={cn("fixed inset-0 left-28 z-[100]", !isMapOpen && "pointer-events-none")}
-          initial={false}
-          animate={{ y: isMapOpen ? 0 : "100vh" }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
-        >
+        <div className={cn("fixed inset-0 left-28 z-[100] transition-all duration-500 ease-out transform", !isMapOpen ? "pointer-events-none translate-y-full" : "translate-y-0")}>
           <MapView />
-        </motion.div>
+        </div>
       </main>
     </div>
   );

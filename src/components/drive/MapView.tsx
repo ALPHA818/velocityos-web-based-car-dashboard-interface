@@ -8,32 +8,36 @@ import { X, LocateFixed } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-const DefaultIcon = L.icon({
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-L.Marker.prototype.options.icon = DefaultIcon;
 const UserIcon = L.divIcon({
   className: 'custom-user-icon',
   html: `<div class="w-8 h-8 bg-primary border-4 border-white rounded-full shadow-glow animate-pulse"></div>`,
   iconSize: [32, 32],
   iconAnchor: [16, 16],
 });
-function MapController() {
+
+function MapContent() {
   const map = useMap();
   const currentPos = useOSStore((s) => s.currentPos);
   const activeRoute = useOSStore((s) => s.activeRoute);
   const isFollowing = useOSStore((s) => s.isFollowing);
   const setFollowing = useOSStore((s) => s.setFollowing);
   const isMapOpen = useOSStore((s) => s.isMapOpen);
+  const activeDestination = useOSStore((s) => s.activeDestination);
+  const locations = useOSStore((s) => s.locations);
+
+  const DefaultIcon = L.icon({
+    iconUrl: markerIcon,
+    shadowUrl: markerShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+  });
 
   useEffect(() => {
     if (isMapOpen) {
       setTimeout(() => map.invalidateSize(), 150);
     }
-  }, [isMapOpen]);
+  }, [isMapOpen, map]);
+
   useEffect(() => {
     map.on('dragstart', () => {
       setFollowing(false);
@@ -43,6 +47,7 @@ function MapController() {
       map.off('dragstart');
     };
   }, [map, setFollowing]);
+
   useEffect(() => {
     if (!isFollowing) return;
     if (activeRoute && activeRoute.coordinates.length > 0) {
@@ -51,8 +56,33 @@ function MapController() {
     } else if (currentPos) {
       map.setView(currentPos, 16, { animate: true });
     }
-  }, [activeRoute, currentPos, isFollowing]);
-  return null;
+  }, [activeRoute, currentPos, isFollowing, map]);
+
+  return (
+    <>
+      <TileLayer {...MAP_TILES} />
+      {currentPos && (
+        <Marker position={currentPos} icon={UserIcon} zIndexOffset={1000} />
+      )}
+      {locations.map((loc) => (
+        <Marker
+          key={loc.id}
+          position={[loc.lat, loc.lon]}
+          opacity={activeDestination?.id === loc.id ? 1 : 0.4}
+          icon={DefaultIcon}
+        />
+      ))}
+      {activeRoute && (
+        <Polyline
+          positions={activeRoute.coordinates}
+          color="#3b82f6"
+          weight={10}
+          opacity={0.9}
+          lineCap="round"
+        />
+      )}
+    </>
+  );
 }
 export function MapView() {
   const isMapOpen = useOSStore((s) => s.isMapOpen);
@@ -61,8 +91,8 @@ export function MapView() {
   const activeRoute = useOSStore((s) => s.activeRoute);
   const activeDestination = useOSStore((s) => s.activeDestination);
   const locations = useOSStore((s) => s.locations);
-  const setFollowing = useOSStore((s) => s.setFollowing);
   const isFollowing = useOSStore((s) => s.isFollowing);
+  const setFollowing = useOSStore((s) => s.setFollowing);
   return (
     <div className="fixed inset-0 z-[100] bg-black">
       <MapContainer
@@ -71,27 +101,7 @@ export function MapView() {
         zoomControl={false}
         className="w-full h-full"
       >
-        <TileLayer {...MAP_TILES} />
-        {currentPos && (
-          <Marker position={currentPos} icon={UserIcon} zIndexOffset={1000} />
-        )}
-        {locations.map((loc) => (
-          <Marker
-            key={loc.id}
-            position={[loc.lat, loc.lon]}
-            opacity={activeDestination?.id === loc.id ? 1 : 0.4}
-          />
-        ))}
-        {activeRoute && (
-          <Polyline
-            positions={activeRoute.coordinates}
-            color="#3b82f6"
-            weight={10}
-            opacity={0.9}
-            lineCap="round"
-          />
-        )}
-        <MapController />
+        <MapContent />
       </MapContainer>
       <div className="absolute top-8 left-32 z-[1000] flex gap-4">
         <Button
