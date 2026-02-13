@@ -66,7 +66,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
     handleVisibilityChange();
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setCurrentPos([pos.coords.latitude, pos.coords.longitude], pos.coords.speed),
-      (err) => console.error(`GPS Error: ${err.message}`),
+      (err) => console.warn(`GPS Error: ${err.message}`),
       { enableHighAccuracy: true }
     );
     return () => {

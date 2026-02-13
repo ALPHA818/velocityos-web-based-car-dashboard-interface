@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { cn } from '@/lib/utils';
 import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { useOSStore } from '@/store/use-os-store';
@@ -105,7 +106,7 @@ export function MapView() {
       </div>
       <div className="absolute bottom-8 right-8 z-[1000] flex flex-col gap-4">
          <Button
-          variant={isFollowing ? "primary" : "secondary"}
+          variant={isFollowing ? "default" : "secondary"}
           size="lg"
           className={cn(
             "h-20 w-20 rounded-3xl backdrop-blur-xl border-white/10 transition-all",
