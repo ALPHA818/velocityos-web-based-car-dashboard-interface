@@ -22,7 +22,7 @@
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --input: 240 3.7% 15.9%;
-    --radius: 1rem;
+    --radius: 1.5rem;
   }
   * {
     @apply border-border;
@@ -32,7 +32,7 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
-    background-color: #09090b;
+    background-color: #000000;
     -webkit-user-select: none;
     user-select: none;
     touch-action: manipulation;
@@ -48,37 +48,33 @@
 /* Leaflet Dark Mode & UI Overrides */
 @import "leaflet/dist/leaflet.css";
 .leaflet-container {
-  background: #09090b !important;
+  background: #000000 !important;
   width: 100%;
   height: 100%;
 }
 .leaflet-tile-pane {
-  filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+  /* High contrast night-driving filter */
+  filter: invert(1) hue-rotate(180deg) brightness(0.6) contrast(1.4) saturate(0.5);
 }
-.leaflet-control-zoom {
-  border: none !important;
-  margin: 2rem !important;
+.leaflet-control-container .leaflet-top, 
+.leaflet-control-container .leaflet-bottom {
+  z-index: 1001;
 }
-.leaflet-control-zoom-in, .leaflet-control-zoom-out {
-  background-color: rgba(24, 24, 27, 0.8) !important;
-  color: white !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  width: 64px !important;
-  height: 64px !important;
-  line-height: 64px !important;
-  font-size: 24px !important;
-  border-radius: 16px !important;
-  margin-bottom: 1rem !important;
-  backdrop-filter: blur(8px);
-}
-.leaflet-v-layer {
-  pointer-events: none;
+/* Ensure the user marker dot isn't inverted by the tile-pane filter */
+.custom-user-icon {
+  z-index: 2000 !important;
 }
 @layer components {
   .dashboard-card {
-    @apply bg-zinc-900/50 backdrop-blur-md border border-white/10 rounded-3xl p-6 transition-all active:scale-[0.98];
+    @apply bg-zinc-900/60 backdrop-blur-2xl border border-white/5 rounded-[2.5rem] p-8 transition-all active:scale-[0.99];
   }
   .touch-target {
-    @apply min-h-[64px] min-w-[64px] flex items-center justify-center;
+    @apply min-h-[64px] min-w-[64px] flex items-center justify-center cursor-pointer;
+  }
+  .shadow-glow {
+    box-shadow: 0 0 25px -5px rgba(59, 130, 246, 0.5);
+  }
+  .shadow-glow-lg {
+    box-shadow: 0 0 50px -10px rgba(59, 130, 246, 0.6);
   }
 }

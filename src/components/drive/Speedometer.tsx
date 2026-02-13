@@ -1,69 +1,56 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { formatSpeed, haversineDistance } from '@/lib/drive-utils';
 import { Navigation } from 'lucide-react';
 import { useOSStore } from '@/store/use-os-store';
 export function Speedometer() {
-  const [speed, setSpeed] = useState<number>(0);
-  const [error, setError] = useState<string | null>(null);
-  const prevRef = React.useRef<{ coords: { latitude: number; longitude: number }; timestamp: number } | null>(null);
+  const currentPos = useOSStore((s) => s.currentPos);
+  const currentSpeed = useOSStore((s) => s.currentSpeed);
   const units = useOSStore((s) => s.settings.units);
+  const [displaySpeed, setDisplaySpeed] = useState<number>(0);
+  const prevRef = useRef<{ pos: [number, number]; ts: number } | null>(null);
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setError("GPS not supported");
-      return;
+    if (!currentPos) return;
+    const now = Date.now();
+    let computedSpeed = currentSpeed || 0;
+    // Fallback haversine calculation for redundancy
+    if (prevRef.current) {
+      const prev = prevRef.current;
+      const dt = (now - prev.ts) / 1000;
+      if (dt > 0.5 && dt < 10) {
+        const dist = haversineDistance(currentPos[0], currentPos[1], prev.pos[0], prev.pos[1]);
+        const calcSpeed = dist / dt;
+        // Average the reported GPS speed and computed speed for smoother display
+        computedSpeed = (computedSpeed + calcSpeed) / 2;
+      }
     }
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const { coords, timestamp } = position;
-        if (prevRef.current) {
-          const prev = prevRef.current;
-          const dt = (timestamp - prev.timestamp) / 1000;
-          if (dt > 0.5 && dt < 30) {
-            const dist = haversineDistance(coords.latitude, coords.longitude, prev.coords.latitude, prev.coords.longitude);
-            const computedSpeed = dist / dt;
-            const gpsSpeed = coords.speed || 0;
-            const s = (computedSpeed + gpsSpeed) / 2;
-            setSpeed(formatSpeed(s, units));
-          } else {
-            setSpeed(formatSpeed(coords.speed || 0, units));
-          }
-        } else {
-          setSpeed(formatSpeed(coords.speed || 0, units));
-        }
-        prevRef.current = { coords: { latitude: coords.latitude, longitude: coords.longitude }, timestamp };
-      },
-      (err) => {
-        if (err.code === 1) {
-          setError("Location Denied");
-        } else {
-          setError(`GPS Error (${err.code})`);
-          console.error(`Geolocation error: ${err.message}`);
-        }
-      },
-      { enableHighAccuracy: true }
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [units]);
+    setDisplaySpeed(formatSpeed(computedSpeed, units));
+    prevRef.current = { pos: currentPos, ts: now };
+  }, [currentPos, currentSpeed, units]);
   return (
     <div className="flex flex-col items-center justify-center h-full relative overflow-hidden">
-      <div className="absolute top-0 right-0 p-4 opacity-20">
-        <Navigation className="w-12 h-12" />
+      <div className="absolute top-0 right-0 p-4 opacity-10">
+        <Navigation className="w-16 h-16" />
       </div>
       <div className="flex items-baseline gap-2">
-        <span className="text-8xl md:text-9xl font-black tracking-tighter tabular-nums text-primary drop-shadow-[0_0_15px_rgba(59,130,246,0.3)]">
-          {speed}
+        <span className="text-9xl md:text-[10rem] font-black tracking-tighter tabular-nums text-primary drop-shadow-[0_0_30px_rgba(59,130,246,0.4)]">
+          {displaySpeed}
         </span>
-        <span className="text-2xl font-bold text-muted-foreground uppercase tracking-widest">
+        <span className="text-3xl font-bold text-muted-foreground uppercase tracking-[0.2em]">
           {units}
         </span>
       </div>
-      {error && (
-        <div className="mt-4 px-4 py-2 bg-destructive/10 rounded-full flex items-center gap-2">
-          <span className="text-xs text-destructive font-black uppercase tracking-tighter">
-            {error === "Location Denied" ? "Enable Location in Settings" : error}
-          </span>
-        </div>
-      )}
+      <div className="mt-6 flex gap-3">
+        {[1, 2, 3].map((i) => (
+          <div 
+            key={i} 
+            className={cn(
+              "h-2 w-12 rounded-full transition-colors duration-500",
+              displaySpeed > i * 20 ? "bg-primary shadow-glow" : "bg-zinc-800"
+            )} 
+          />
+        ))}
+      </div>
     </div>
   );
 }
+import { cn } from '@/lib/utils';

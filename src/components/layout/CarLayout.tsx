@@ -1,10 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import ReactPlayer from 'react-player';
 import { Home, Map, Music, Grid, Settings, Wifi, Battery } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { requestWakeLock } from '@/lib/drive-utils';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useOSStore } from '@/store/use-os-store';
+import { useMediaStore, getTrack } from '@/store/use-media-store';
 import { MapView } from '@/components/drive/MapView';
 import { motion, AnimatePresence } from 'framer-motion';
 interface NavButtonProps {
@@ -35,6 +37,17 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const openMap = useOSStore((s) => s.openMap);
   const closeMap = useOSStore((s) => s.closeMap);
   const setCurrentPos = useOSStore((s) => s.setCurrentPos);
+  const isPlaying = useMediaStore((s) => s.isPlaying);
+  const currentTrackIndex = useMediaStore((s) => s.currentTrackIndex);
+  const volume = useMediaStore((s) => s.volume);
+  const setProgress = useMediaStore((s) => s.setProgress);
+  const setDuration = useMediaStore((s) => s.setDuration);
+  const track = getTrack(currentTrackIndex);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
   useEffect(() => {
     let currentWakeLock: any = null;
     const handleVisibilityChange = async () => {
@@ -44,15 +57,16 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
         try {
           await currentWakeLock.release();
           currentWakeLock = null;
-        } catch (e) {}
+        } catch (e) {
+          console.warn('WakeLock release failed', e);
+        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     handleVisibilityChange();
-    // Track GPS globally for MapView
     const watchId = navigator.geolocation.watchPosition(
-      (pos) => setCurrentPos([pos.coords.latitude, pos.coords.longitude]),
-      (err) => console.error(err),
+      (pos) => setCurrentPos([pos.coords.latitude, pos.coords.longitude], pos.coords.speed),
+      (err) => console.error(`GPS Error: ${err.message}`),
       { enableHighAccuracy: true }
     );
     return () => {
@@ -63,6 +77,18 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   }, [setCurrentPos]);
   return (
     <div className="flex h-screen w-screen bg-black text-foreground overflow-hidden font-sans antialiased">
+      {/* Hidden Global Audio Engine */}
+      <div className="hidden">
+        <ReactPlayer
+          url={track.url}
+          playing={isPlaying}
+          volume={volume}
+          onProgress={(s) => setProgress(s.played * 100)}
+          onDuration={(d) => setDuration(d)}
+          width="0"
+          height="0"
+        />
+      </div>
       <nav className="w-28 border-r border-white/10 flex flex-col items-center py-8 gap-6 z-[110] bg-zinc-950/80 backdrop-blur-2xl">
         <div className="mb-4 flex flex-col items-center gap-1">
           <span className="text-xl font-black text-primary tracking-tighter">VOS</span>
@@ -93,7 +119,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
         />
         <div className="mt-auto space-y-6 flex flex-col items-center">
           <div className="text-center">
-            <div className="text-lg font-bold tabular-nums">{format(new Date(), 'HH:mm')}</div>
+            <div className="text-lg font-bold tabular-nums">{format(currentTime, 'HH:mm')}</div>
           </div>
           <NavButton
             icon={Settings}

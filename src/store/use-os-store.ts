@@ -10,9 +10,11 @@ interface OSState {
   error: string | null;
   // Navigation State
   isMapOpen: boolean;
+  isFollowing: boolean;
   activeDestination: SavedLocation | null;
   activeRoute: RouteData | null;
   currentPos: [number, number] | null;
+  currentSpeed: number | null;
   fetchSettings: () => Promise<void>;
   updateSettings: (patch: Partial<UserSettings>) => Promise<void>;
   fetchLocations: () => Promise<void>;
@@ -22,7 +24,8 @@ interface OSState {
   // Navigation Actions
   openMap: (dest?: SavedLocation) => void;
   closeMap: () => void;
-  setCurrentPos: (pos: [number, number]) => void;
+  setFollowing: (following: boolean) => void;
+  setCurrentPos: (pos: [number, number], speed: number | null) => void;
   calculateRoute: () => Promise<void>;
 }
 export const useOSStore = create<OSState>()(
@@ -38,9 +41,11 @@ export const useOSStore = create<OSState>()(
       isLoading: false,
       error: null,
       isMapOpen: false,
+      isFollowing: true,
       activeDestination: null,
       activeRoute: null,
       currentPos: null,
+      currentSpeed: null,
       fetchSettings: async () => {
         set({ isLoading: true });
         try {
@@ -101,6 +106,7 @@ export const useOSStore = create<OSState>()(
             isLoading: false,
             error: null,
             isMapOpen: false,
+            isFollowing: true,
             activeDestination: null,
             activeRoute: null
           });
@@ -111,13 +117,14 @@ export const useOSStore = create<OSState>()(
         }
       },
       openMap: (dest) => {
-        set({ isMapOpen: true, activeDestination: dest || null });
+        set({ isMapOpen: true, isFollowing: true, activeDestination: dest || null });
         if (dest) {
           get().calculateRoute();
         }
       },
       closeMap: () => set({ isMapOpen: false, activeDestination: null, activeRoute: null }),
-      setCurrentPos: (pos) => set({ currentPos: pos }),
+      setFollowing: (isFollowing) => set({ isFollowing }),
+      setCurrentPos: (pos, speed) => set({ currentPos: pos, currentSpeed: speed }),
       calculateRoute: async () => {
         const { currentPos, activeDestination } = get();
         if (!currentPos || !activeDestination) return;
