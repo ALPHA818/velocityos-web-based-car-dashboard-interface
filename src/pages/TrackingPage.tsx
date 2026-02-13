@@ -3,8 +3,8 @@ import { useParams } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MAP_TILES } from '@/lib/nav-utils';
-import { Navigation, Wifi, Info, Clock, Gauge } from 'lucide-react';
+import { MAP_THEMES } from '@/lib/nav-utils';
+import { Wifi, Clock, Gauge } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { formatDistanceToNow } from 'date-fns';
 import type { TrackingState } from '@shared/types';
@@ -72,7 +72,10 @@ export function TrackingPage() {
       </div>
       <div className="flex-1 relative">
         <MapContainer center={[data.lat, data.lon]} zoom={15} zoomControl={false} className="w-full h-full">
-          <TileLayer {...MAP_TILES} />
+          <TileLayer 
+            url={MAP_THEMES.dark.url} 
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          />
           <Marker position={[data.lat, data.lon]} icon={VehicleIcon} />
           <MapSync pos={[data.lat, data.lon]} />
         </MapContainer>

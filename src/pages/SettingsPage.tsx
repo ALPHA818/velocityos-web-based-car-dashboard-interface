@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { usePWAInstall } from '@/hooks/use-pwa-install';
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,7 +62,10 @@ export function SettingsPage() {
                 <Label
                   key={t.id}
                   htmlFor={t.id}
-                  className={`flex flex-col items-center justify-center h-32 rounded-3xl border-2 transition-all cursor-pointer gap-2 ${mapTheme === t.id ? 'border-primary bg-primary/10' : 'border-white/5 bg-white/5'}`}
+                  className={cn(
+                    "flex flex-col items-center justify-center h-32 rounded-3xl border-2 transition-all cursor-pointer gap-2",
+                    mapTheme === t.id ? 'border-primary bg-primary/10' : 'border-white/5 bg-white/5'
+                  )}
                 >
                   <RadioGroupItem value={t.id} id={t.id} className="sr-only" />
                   <t.icon className={cn("w-8 h-8", mapTheme === t.id ? "text-primary" : "text-muted-foreground")} />
@@ -82,14 +86,20 @@ export function SettingsPage() {
             >
               <Label
                 htmlFor="mph"
-                className={`flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer ${units === 'mph' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'}`}
+                className={cn(
+                  "flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer",
+                  units === 'mph' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'
+                )}
               >
                 <RadioGroupItem value="mph" id="mph" className="sr-only" />
                 <span className="text-xl font-bold uppercase tracking-widest">Imperial (MPH)</span>
               </Label>
               <Label
                 htmlFor="kph"
-                className={`flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer ${units === 'kph' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'}`}
+                className={cn(
+                  "flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer",
+                  units === 'kph' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'
+                )}
               >
                 <RadioGroupItem value="kph" id="kph" className="sr-only" />
                 <span className="text-xl font-bold uppercase tracking-widest">Metric (KPH)</span>
@@ -108,14 +118,20 @@ export function SettingsPage() {
             >
               <Label
                 htmlFor="google"
-                className={`flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer ${mapProvider === 'google' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'}`}
+                className={cn(
+                  "flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer",
+                  mapProvider === 'google' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'
+                )}
               >
                 <RadioGroupItem value="google" id="google" className="sr-only" />
                 <span className="text-xl font-bold uppercase tracking-widest">Google Maps</span>
               </Label>
               <Label
                 htmlFor="waze"
-                className={`flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer ${mapProvider === 'waze' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'}`}
+                className={cn(
+                  "flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer",
+                  mapProvider === 'waze' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'
+                )}
               >
                 <RadioGroupItem value="waze" id="waze" className="sr-only" />
                 <span className="text-xl font-bold uppercase tracking-widest">Waze</span>
