@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import ReactPlayer from 'react-player';
-import { Home, Map, Music, Grid, Settings, Wifi, Battery } from 'lucide-react';
+import { Home, Map, Music, Grid, Settings, Wifi, Battery, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { requestWakeLock } from '@/lib/drive-utils';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -13,8 +13,9 @@ interface NavButtonProps {
   icon: React.ElementType;
   isActive?: boolean;
   onClick?: () => void;
+  badge?: boolean;
 }
-const NavButton = ({ icon: Icon, isActive, onClick }: NavButtonProps) => (
+const NavButton = ({ icon: Icon, isActive, onClick, badge }: NavButtonProps) => (
   <button
     onClick={onClick}
     className={cn(
@@ -27,6 +28,9 @@ const NavButton = ({ icon: Icon, isActive, onClick }: NavButtonProps) => (
     <Icon className="w-10 h-10" />
     {isActive && (
       <span className="absolute -left-1 w-1.5 h-10 bg-primary-foreground rounded-r-full shadow-glow" />
+    )}
+    {badge && !isActive && (
+      <span className="absolute top-4 right-4 w-3 h-3 bg-primary rounded-full animate-pulse shadow-glow" />
     )}
   </button>
 );
@@ -45,6 +49,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const gpsStatus = useOSStore((s) => s.gpsStatus);
   const autoTheme = useOSStore((s) => s.settings.autoTheme);
   const updateSettings = useOSStore((s) => s.updateSettings);
+  const activeDestination = useOSStore((s) => s.activeDestination);
   const isPlaying = useMediaStore((s) => s.isPlaying);
   const currentTrackIndex = useMediaStore((s) => s.currentTrackIndex);
   const volume = useMediaStore((s) => s.volume);
@@ -54,24 +59,21 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const [currentTime, setCurrentTime] = useState(new Date());
   const trackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
-      setCurrentTime(now);
-      // Auto Theme Logic
-      if (autoTheme) {
-        const hour = now.getHours();
-        const isNight = hour >= 18 || hour < 6;
-        const targetTheme = isNight ? 'dark' : 'light';
-        const targetMapTheme = isNight ? 'highway' : 'light';
-        // Only update if different
-        const currentSettings = useOSStore.getState().settings;
-        if (currentSettings.theme !== targetTheme || currentSettings.mapTheme !== targetMapTheme) {
-          updateSettings({ theme: targetTheme, mapTheme: targetMapTheme as any });
-        }
-      }
-    }, 60000);
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
-  }, [autoTheme, updateSettings]);
+  }, []);
+  useEffect(() => {
+    if (autoTheme) {
+      const hour = currentTime.getHours();
+      const isNight = hour >= 18 || hour < 6;
+      const targetTheme = isNight ? 'dark' : 'light';
+      const targetMapTheme = isNight ? 'highway' : 'light';
+      const settings = useOSStore.getState().settings;
+      if (settings.theme !== targetTheme || settings.mapTheme !== targetMapTheme) {
+        updateSettings({ theme: targetTheme, mapTheme: targetMapTheme as any });
+      }
+    }
+  }, [currentTime, autoTheme, updateSettings]);
   useEffect(() => {
     if (isSharingLive && trackingId && currentPos && gpsStatus === 'granted') {
       if (!trackIntervalRef.current) {
@@ -87,61 +89,28 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
               })
             });
           } catch (e) {
-            console.error('Failed to send tracking update', e);
+            console.error('Tracking update failed', e);
           }
         }, 10000);
       }
-    } else {
-      if (trackIntervalRef.current) {
-        clearInterval(trackIntervalRef.current);
-        trackIntervalRef.current = null;
-      }
+    } else if (trackIntervalRef.current) {
+      clearInterval(trackIntervalRef.current);
+      trackIntervalRef.current = null;
     }
-    return () => {
-      if (trackIntervalRef.current) {
-        clearInterval(trackIntervalRef.current);
-        trackIntervalRef.current = null;
-      }
-    };
+    return () => { if (trackIntervalRef.current) clearInterval(trackIntervalRef.current); };
   }, [isSharingLive, trackingId, currentPos, currentSpeed, gpsStatus]);
   useEffect(() => {
-    if (!navigator.permissions) return;
-    navigator.permissions.query({ name: 'geolocation' as any }).then((result) => {
-      setGpsStatus(result.state === 'granted' ? 'granted' : result.state === 'denied' ? 'denied' : 'prompt');
-      result.onchange = () => {
-        setGpsStatus(result.state === 'granted' ? 'granted' : result.state === 'denied' ? 'denied' : 'prompt');
-      };
-    }).catch(() => setGpsStatus('unsupported'));
-  }, [setGpsStatus]);
-  useEffect(() => {
-    let currentWakeLock: any = null;
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
-        currentWakeLock = await requestWakeLock();
-      } else if (currentWakeLock) {
-        try {
-          await currentWakeLock.release();
-          currentWakeLock = null;
-        } catch (e) {
-          console.warn('WakeLock release failed', e);
-        }
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    handleVisibilityChange();
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setCurrentPos([pos.coords.latitude, pos.coords.longitude], pos.coords.speed),
-      (err) => {
-        if (err.code === err.PERMISSION_DENIED) {
-          setCurrentPos(null, 0, true);
-        }
-      },
+      (err) => { if (err.code === err.PERMISSION_DENIED) setCurrentPos(null, 0, true); },
       { enableHighAccuracy: true }
     );
+    let wakeLock: any = null;
+    const lock = async () => wakeLock = await requestWakeLock();
+    lock();
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (currentWakeLock) currentWakeLock.release().catch(() => {});
       navigator.geolocation.clearWatch(watchId);
+      if (wakeLock) wakeLock.release().catch(() => {});
     };
   }, [setCurrentPos]);
   return (
@@ -157,7 +126,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
           height="0"
         />
       </div>
-      <nav className="w-28 border-r border-white/10 flex flex-col items-center py-8 gap-6 z-[110] bg-zinc-950/80 backdrop-blur-2xl">
+      <nav className="w-28 border-r border-white/10 flex flex-col items-center py-8 gap-4 z-[110] bg-zinc-950/80 backdrop-blur-2xl">
         <div className="mb-4 flex flex-col items-center gap-1">
           <span className="text-xl font-black text-primary tracking-tighter">VOS</span>
           <div className="flex gap-1 items-center">
@@ -171,8 +140,14 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
           onClick={() => { closeMap(); navigate('/'); }}
         />
         <NavButton
+          icon={MapPin}
+          isActive={location.pathname === '/navigation' && !isMapOpen}
+          onClick={() => { closeMap(); navigate('/navigation'); }}
+        />
+        <NavButton
           icon={Map}
           isActive={isMapOpen}
+          badge={!!activeDestination}
           onClick={() => isMapOpen ? closeMap() : openMap()}
         />
         <NavButton
@@ -185,8 +160,8 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
           isActive={location.pathname === '/apps' && !isMapOpen}
           onClick={() => { closeMap(); navigate('/apps'); }}
         />
-        <div className="mt-auto space-y-6 flex flex-col items-center">
-          <div className="text-center">
+        <div className="mt-auto space-y-4 flex flex-col items-center">
+          <div className="text-center py-2">
             <div className="text-2xl font-black tabular-nums">{format(currentTime, 'HH:mm')}</div>
           </div>
           <NavButton
@@ -212,7 +187,10 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
             )}
           </AnimatePresence>
         </div>
-        <div className={cn("fixed inset-0 left-28 z-[100] transition-all duration-500 ease-out transform", !isMapOpen ? "pointer-events-none translate-y-full" : "translate-y-0")}>
+        <div className={cn(
+          "fixed inset-0 left-28 z-[100] transition-all duration-500 ease-out transform", 
+          !isMapOpen ? "pointer-events-none translate-y-full opacity-0" : "translate-y-0 opacity-100"
+        )}>
           <MapView />
         </div>
       </main>

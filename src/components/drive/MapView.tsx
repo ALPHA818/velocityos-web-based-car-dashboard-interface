@@ -7,7 +7,7 @@ import { getCategoryColor, formatETA, getVectorStyle } from '@/lib/nav-utils';
 import { X, Navigation, Share2, Compass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TrackingOverlay } from './TrackingOverlay';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 export function MapView() {
   const isMapOpen = useOSStore((s) => s.isMapOpen);
   const closeMap = useOSStore((s) => s.closeMap);
@@ -20,6 +20,7 @@ export function MapView() {
   const currentPos = useOSStore((s) => s.currentPos);
   const locations = useOSStore((s) => s.locations);
   const mapRef = useRef<any>(null);
+  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showShare, setShowShare] = React.useState(false);
   // Sync Map View
   useEffect(() => {
@@ -27,10 +28,19 @@ export function MapView() {
       mapRef.current.flyTo({
         center: [currentPos[1], currentPos[0]],
         zoom: 16,
+        pitch: 60,
         essential: true
       });
     }
   }, [currentPos, isFollowing, isMapOpen]);
+  // Handle auto-follow re-engagement
+  const handleMapInteraction = () => {
+    if (isFollowing) setFollowing(false);
+    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+    inactivityTimerRef.current = setTimeout(() => {
+      setFollowing(true);
+    }, 10000);
+  };
   const vectorStyle = useMemo(() => getVectorStyle(mapTheme), [mapTheme]);
   const routeGeoJSON = useMemo((): GeoJSON.Feature<GeoJSON.LineString> | null => {
     if (!activeRoute) return null;
@@ -46,23 +56,25 @@ export function MapView() {
   if (!isMapOpen) return null;
   return (
     <div className="fixed inset-0 z-[100] bg-black overflow-hidden">
-      {/* Decorative Overlay for readability */}
-      <div className="absolute inset-0 z-[101] pointer-events-none bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)]" />
+      {/* Top Safe Zone Gradient */}
+      <div className="absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-black/80 to-transparent z-[101] pointer-events-none" />
       <Map
         ref={mapRef}
         initialViewState={{
           longitude: currentPos ? currentPos[1] : -74.006,
           latitude: currentPos ? currentPos[0] : 40.7128,
-          zoom: 13
+          zoom: 13,
+          pitch: 45
         }}
         mapStyle={vectorStyle}
-        onDragStart={() => setFollowing(false)}
+        onDrag={handleMapInteraction}
+        onWheel={handleMapInteraction}
         style={{ width: '100%', height: '100%' }}
       >
         {currentPos && (
           <Marker longitude={currentPos[1]} latitude={currentPos[0]}>
             <div className="relative flex items-center justify-center">
-              <motion.div 
+              <motion.div
                 animate={{ scale: [1, 2.5], opacity: [0.5, 0] }}
                 transition={{ repeat: Infinity, duration: 2, ease: "easeOut" }}
                 className="absolute w-12 h-12 bg-primary rounded-full"
@@ -74,11 +86,10 @@ export function MapView() {
         {locations.map((loc) => (
           <Marker key={loc.id} longitude={loc.lon} latitude={loc.lat}>
             <div
-              className="custom-pin-icon w-8 h-8 rounded-full border-4 border-white shadow-glow transition-transform"
+              className="custom-pin-icon w-8 h-8 rounded-full border-4 border-white shadow-glow transition-all duration-300"
               style={{
                 backgroundColor: getCategoryColor(loc.category),
-                opacity: activeDestination?.id === loc.id ? 1 : 0.6,
-                transform: activeDestination?.id === loc.id ? 'scale(1.3)' : 'scale(1)'
+                transform: activeDestination?.id === loc.id ? 'scale(1.5) translateY(-10px)' : 'scale(1)'
               }}
             />
           </Marker>
@@ -91,36 +102,44 @@ export function MapView() {
               layout={{ 'line-join': 'round', 'line-cap': 'round' }}
               paint={{
                 'line-color': '#3b82f6',
-                'line-width': 12,
+                'line-width': 10,
                 'line-opacity': 0.8,
-                'line-blur': 2
+                'line-blur': 1
               }}
             />
           </Source>
         )}
       </Map>
-      <div className="absolute top-8 left-32 right-8 z-[110] flex justify-between items-start pointer-events-none">
-        <div className="flex gap-4 pointer-events-auto">
+      {/* Header UI */}
+      <div className="absolute top-8 left-32 right-8 z-[110] flex justify-between items-start">
+        <div className="flex gap-4">
           <Button
             variant="secondary"
             size="lg"
             onClick={closeMap}
-            className="h-24 w-24 rounded-[2rem] bg-zinc-900/95 backdrop-blur-3xl border-white/20 shadow-glow active:scale-90 transition-transform"
+            className="h-24 w-24 rounded-[2rem] bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-90 transition-transform"
           >
             <X className="w-12 h-12" />
           </Button>
-          {activeDestination && (
-            <div className="bg-primary/80 backdrop-blur-3xl p-6 rounded-[2.5rem] flex flex-col justify-center min-w-[350px] border border-white/20 shadow-glow-lg">
-              <span className="text-sm uppercase font-black text-white tracking-widest flex items-center gap-2">
-                <Navigation className="w-4 h-4 fill-current" /> Navigating To
-              </span>
-              <span className="text-4xl font-black text-white truncate max-w-[400px] text-neon">{activeDestination.label}</span>
-            </div>
-          )}
+          <AnimatePresence>
+            {activeDestination && (
+              <motion.div 
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="bg-primary/90 backdrop-blur-3xl p-6 rounded-[2.5rem] flex flex-col justify-center min-w-[350px] border border-white/20 shadow-glow-lg"
+              >
+                <span className="text-xs uppercase font-black text-white/70 tracking-widest flex items-center gap-2">
+                  <Navigation className="w-4 h-4 fill-current" /> Navigating To
+                </span>
+                <span className="text-4xl font-black text-white truncate max-w-[400px] text-neon">{activeDestination.label}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-        <div className="flex flex-col gap-4 pointer-events-auto">
+        <div className="flex flex-col gap-4">
           {isSharingLive && (
-            <div className="px-6 py-2 bg-red-600 text-white text-sm font-black rounded-full animate-pulse shadow-glow flex items-center gap-2 uppercase">
+            <div className="px-6 py-2 bg-red-600 text-white text-sm font-black rounded-full animate-pulse shadow-glow flex items-center gap-2 uppercase self-end">
               <div className="w-3 h-3 bg-white rounded-full" /> Live
             </div>
           )}
@@ -128,45 +147,54 @@ export function MapView() {
             variant="secondary"
             size="lg"
             onClick={() => setShowShare(true)}
-            className={cn("h-24 w-24 rounded-[2rem] bg-zinc-900/95 backdrop-blur-3xl border-white/20 shadow-glow active:scale-90 transition-transform", isSharingLive && "text-primary")}
+            className={cn(
+              "h-24 w-24 rounded-[2rem] bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-90 transition-transform", 
+              isSharingLive && "text-primary border-primary/50"
+            )}
           >
             <Share2 className="w-12 h-12" />
           </Button>
         </div>
       </div>
-      <div className="absolute bottom-8 right-8 z-[110] flex flex-col gap-4">
+      {/* Control Buttons */}
+      <div className="absolute bottom-10 right-10 z-[110] flex flex-col gap-4">
          <Button
           variant={isFollowing ? "default" : "secondary"}
           size="lg"
           className={cn(
-            "h-24 w-24 rounded-[2rem] backdrop-blur-3xl border-white/20 transition-all shadow-glow-lg active:scale-90",
-            isFollowing ? "bg-primary" : "bg-zinc-900/95"
+            "h-24 w-24 rounded-[2.5rem] backdrop-blur-3xl border border-white/10 transition-all shadow-glow-lg active:scale-90",
+            isFollowing ? "bg-primary" : "bg-zinc-950/90"
           )}
           onClick={() => setFollowing(true)}
         >
           <Compass className={cn("w-12 h-12", isFollowing && "animate-pulse")} />
         </Button>
       </div>
+      {/* Footer Info Panel */}
       {activeRoute && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[110] w-[800px] pointer-events-none">
-          <motion.div 
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[110] w-[800px]">
+          <motion.div
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="bg-primary/90 backdrop-blur-3xl border border-white/30 rounded-[3.5rem] p-10 flex items-center justify-between shadow-glow-lg pointer-events-auto"
+            className="bg-zinc-950/95 backdrop-blur-3xl border border-white/20 rounded-[4rem] p-10 flex items-center justify-between shadow-glow-lg"
           >
-            <div className="flex flex-col">
-              <span className="text-white/70 font-black uppercase text-sm tracking-[0.3em]">Arrival</span>
-              <span className="text-6xl font-black tabular-nums text-white text-neon">{formatETA(activeRoute.duration).split(' ')[0]}</span>
+            <div className="flex flex-col items-center flex-1">
+              <span className="text-white/50 font-black uppercase text-xs tracking-[0.3em] mb-1">Arrival</span>
+              <span className="text-6xl font-black tabular-nums text-white text-neon">{formatETA(activeRoute.duration)}</span>
             </div>
-            <div className="h-20 w-px bg-white/20 mx-6" />
-            <div className="flex flex-col items-center">
-              <span className="text-white/70 font-black uppercase text-sm tracking-[0.3em]">Duration</span>
-              <span className="text-5xl font-black tabular-nums text-white">{Math.round(activeRoute.duration / 60)} <span className="text-2xl">min</span></span>
+            <div className="h-16 w-px bg-white/10" />
+            <div className="flex flex-col items-center flex-1">
+              <span className="text-white/50 font-black uppercase text-xs tracking-[0.3em] mb-1">Duration</span>
+              <span className="text-5xl font-black tabular-nums text-white">
+                {Math.round(activeRoute.duration / 60)} <span className="text-xl text-muted-foreground uppercase">min</span>
+              </span>
             </div>
-            <div className="h-20 w-px bg-white/20 mx-6" />
-            <div className="flex flex-col items-end">
-              <span className="text-white/70 font-black uppercase text-sm tracking-[0.3em]">Distance</span>
-              <span className="text-5xl font-black tabular-nums text-white">{(activeRoute.distance / 1000).toFixed(1)} <span className="text-2xl">km</span></span>
+            <div className="h-16 w-px bg-white/10" />
+            <div className="flex flex-col items-center flex-1">
+              <span className="text-white/50 font-black uppercase text-xs tracking-[0.3em] mb-1">Distance</span>
+              <span className="text-5xl font-black tabular-nums text-white">
+                {(activeRoute.distance / 1000).toFixed(1)} <span className="text-xl text-muted-foreground uppercase">km</span>
+              </span>
             </div>
           </motion.div>
         </div>

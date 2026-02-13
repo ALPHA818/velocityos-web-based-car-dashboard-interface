@@ -27,13 +27,16 @@ export const fetchRoute = async (start: [number, number], end: [number, number])
 export const getVectorStyle = (theme: string): any => {
   const isHighway = theme === 'highway';
   const isDark = theme === 'dark' || isHighway;
+  const isVibrant = theme === 'vibrant';
   const bgColor = isHighway ? '#020617' : isDark ? '#09090b' : '#f8fafc';
   const roadColor = isHighway ? '#3b82f6' : isDark ? '#334155' : '#94a3b8';
-  const highwayColor = isHighway ? '#60a5fa' : '#3b82f6';
+  const highwayColor = isHighway ? '#60a5fa' : isVibrant ? '#10b981' : '#3b82f6';
   const landColor = isDark ? '#111827' : '#f1f5f9';
-  const waterColor = isDark ? '#1e3a8a' : '#bfdbfe';
+  const waterColor = isHighway ? '#0f172a' : isVibrant ? '#06b6d4' : isDark ? '#1e3a8a' : '#bfdbfe';
   return {
     version: 8,
+    // Add public glyphs for labels
+    glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
     sources: {
       protomaps: {
         type: 'vector',
@@ -93,16 +96,16 @@ export const getVectorStyle = (theme: string): any => {
         'source-layer': 'roads',
         layout: {
           'text-field': ['get', 'name'],
-          'text-font': ['Inter Bold'],
-          'text-size': 12,
+          'text-font': ['Noto Sans Regular'],
+          'text-size': 14,
           'symbol-placement': 'line',
-          'text-letter-spacing': 0.1
+          'text-letter-spacing': 0.05
         },
         paint: {
           'text-color': isDark ? '#ffffff' : '#000000',
           'text-halo-color': bgColor,
-          'text-halo-width': 2,
-          'text-opacity': 0.8
+          'text-halo-width': 1.5,
+          'text-opacity': 0.9
         }
       }
     ]
