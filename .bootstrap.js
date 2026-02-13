@@ -81,7 +81,8 @@ function runSetupCommands() {
     "bun add react-player@^2.16.0",
     "bun add leaflet react-leaflet @types/leaflet",
     "bun remove react-leaflet",
-    "bun add react-leaflet@4.2.1"
+    "bun add react-leaflet@4.2.1",
+    "bun add date-fns"
 ];
     
     if (commands.length === 0) {
