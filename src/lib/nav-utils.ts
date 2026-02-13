@@ -24,30 +24,81 @@ export const fetchRoute = async (start: [number, number], end: [number, number])
     return null;
   }
 };
-export const MAP_THEMES = {
-  light: {
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    filter: 'none'
-  },
-  dark: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    filter: 'brightness(0.6) contrast(1.2) saturate(0.8)'
-  },
-  vibrant: {
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    filter: 'brightness(1.1) contrast(1.4) saturate(1.3)'
-  },
-  highway: {
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png',
-    filter: 'brightness(1.2) contrast(1.6) saturate(1.5)'
-  }
+export const getVectorStyle = (theme: string): any => {
+  const isDark = theme === 'dark' || theme === 'highway';
+  const bgColor = isDark ? '#09090b' : '#ffffff';
+  const roadColor = isDark ? '#4a5568' : '#cbd5e0';
+  const buildingColor = isDark ? '#18181b' : '#edf2f7';
+  const waterColor = '#4299e1';
+  const landColor = '#48bb78';
+  return {
+    version: 8,
+    sources: {
+      protomaps: {
+        type: 'vector',
+        tiles: ['https://api.protomaps.com/tiles/v3/{z}/{x}/{y}.mvt'],
+        attribution: 'Protomaps © OpenStreetMap'
+      }
+    },
+    layers: [
+      {
+        id: 'background',
+        type: 'background',
+        paint: { 'background-color': bgColor }
+      },
+      {
+        id: 'water',
+        type: 'fill',
+        source: 'protomaps',
+        'source-layer': 'water',
+        paint: { 'fill-color': waterColor }
+      },
+      {
+        id: 'landuse',
+        type: 'fill',
+        source: 'protomaps',
+        'source-layer': 'landuse',
+        paint: { 'fill-color': landColor, 'fill-opacity': 0.2 }
+      },
+      {
+        id: 'buildings',
+        type: 'fill',
+        source: 'protomaps',
+        'source-layer': 'buildings',
+        paint: { 'fill-color': buildingColor, 'fill-opacity': 0.8 }
+      },
+      {
+        id: 'roads',
+        type: 'line',
+        source: 'protomaps',
+        'source-layer': 'roads',
+        paint: {
+          'line-color': roadColor,
+          'line-width': theme === 'highway' ? 3 : 1.5
+        }
+      },
+      {
+        id: 'boundaries',
+        type: 'line',
+        source: 'protomaps',
+        'source-layer': 'boundaries',
+        paint: { 'line-color': '#718096', 'line-dasharray': [2, 2] }
+      }
+    ]
+  };
+};
+export const MAP_THEMES: Record<string, { filter: string }> = {
+  light: { filter: 'none' },
+  dark: { filter: 'brightness(0.6) contrast(1.2) saturate(0.8)' },
+  vibrant: { filter: 'brightness(1.1) contrast(1.4) saturate(1.3)' },
+  highway: { filter: 'brightness(1.2) contrast(1.6) saturate(1.5)' }
 };
 export const getCategoryColor = (category: string) => {
   switch (category) {
-    case 'home': return '#60a5fa'; // Bright Electric Blue
-    case 'work': return '#a78bfa'; // Bright Purple
-    case 'favorite': return '#fbbf24'; // Bright Amber
-    case 'recent': return '#34d399'; // Bright Lime/Emerald
+    case 'home': return '#60a5fa'; 
+    case 'work': return '#a78bfa'; 
+    case 'favorite': return '#fbbf24'; 
+    case 'recent': return '#34d399'; 
     default: return '#9ca3af';
   }
 };

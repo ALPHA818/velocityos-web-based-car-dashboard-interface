@@ -45,27 +45,23 @@
     scrollbar-width: none;
   }
 }
-@import "leaflet/dist/leaflet.css";
-.leaflet-container {
-  background: #000000 !important;
-  width: 100%;
-  height: 100%;
-}
-/* Theme Filters */
-.map-vibrant-filter .leaflet-tile-pane {
+/* MapLibre standard styles */
+@import "maplibre-gl/dist/maplibre-gl.css";
+/* Theme Filters applied to the canvas */
+.map-vibrant-filter .maplibregl-canvas {
   filter: brightness(1.1) contrast(1.4) saturate(1.3);
 }
-.map-highway-filter .leaflet-tile-pane {
+.map-highway-filter .maplibregl-canvas {
   filter: brightness(1.2) contrast(1.6) saturate(1.5);
 }
-.map-dark-filter .leaflet-tile-pane {
+.map-dark-filter .maplibregl-canvas {
   filter: brightness(0.6) contrast(1.2) saturate(0.8);
 }
-.map-light-filter .leaflet-tile-pane {
+.map-light-filter .maplibregl-canvas {
   filter: none;
 }
 /* Ensure UI and Markers are not filtered */
-.leaflet-control-container,
+.maplibregl-ctrl-container,
 .custom-user-icon,
 .custom-pin-icon {
   z-index: 2000 !important;

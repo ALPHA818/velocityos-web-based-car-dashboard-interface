@@ -1,80 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
+import Map, { Source, Layer, Marker, NavigationControl } from 'react-map-gl/maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { useOSStore } from '@/store/use-os-store';
-import { MAP_THEMES, getCategoryColor, formatETA } from '@/lib/nav-utils';
+import { MAP_THEMES, getCategoryColor, formatETA, getVectorStyle } from '@/lib/nav-utils';
 import { X, Navigation, Share2, Compass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TrackingOverlay } from './TrackingOverlay';
-const UserIcon = L.divIcon({
-  className: 'custom-user-icon',
-  html: `<div class="w-10 h-10 bg-primary border-4 border-white rounded-full shadow-glow animate-pulse"></div>`,
-  iconSize: [40, 40],
-  iconAnchor: [20, 20],
-});
-const getColoredIcon = (color: string) => L.divIcon({
-  className: 'custom-pin-icon',
-  html: `<div class="w-10 h-10 rounded-full border-4 border-white shadow-glow" style="background-color: ${color}"></div>`,
-  iconSize: [40, 40],
-  iconAnchor: [20, 20],
-});
-function MapContent() {
-  const map = useMap();
-  const currentPos = useOSStore((s) => s.currentPos);
-  const activeRoute = useOSStore((s) => s.activeRoute);
-  const isFollowing = useOSStore((s) => s.isFollowing);
-  const setFollowing = useOSStore((s) => s.setFollowing);
-  const isMapOpen = useOSStore((s) => s.isMapOpen);
-  const activeDestination = useOSStore((s) => s.activeDestination);
-  const locations = useOSStore((s) => s.locations);
-  const mapTheme = useOSStore((s) => s.settings.mapTheme);
-  useEffect(() => {
-    if (isMapOpen) {
-      setTimeout(() => map.invalidateSize(), 150);
-    }
-  }, [isMapOpen, map]);
-  useMapEvents({
-    dragstart: () => setFollowing(false)
-  });
-  useEffect(() => {
-    if (!isFollowing) return;
-    if (activeRoute && activeRoute.coordinates.length > 0) {
-      const bounds = L.latLngBounds(activeRoute.coordinates);
-      map.fitBounds(bounds, { padding: [120, 120], animate: true });
-    } else if (currentPos) {
-      map.setView(currentPos, 16, { animate: true });
-    }
-  }, [activeRoute, currentPos, isFollowing, map]);
-  const themeConfig = MAP_THEMES[mapTheme] || MAP_THEMES.highway;
-  return (
-    <>
-      <TileLayer url={themeConfig.url} attribution="&copy; OpenStreetMap &copy; CARTO" />
-      {currentPos && (
-        <Marker position={currentPos} icon={UserIcon} zIndexOffset={1000} />
-      )}
-      {locations.map((loc) => (
-        <Marker
-          key={loc.id}
-          position={[loc.lat, loc.lon]}
-          opacity={activeDestination?.id === loc.id ? 1 : 0.7}
-          icon={getColoredIcon(getCategoryColor(loc.category))}
-        />
-      ))}
-      {activeRoute && (
-        <Polyline
-          positions={activeRoute.coordinates}
-          color="#3b82f6"
-          weight={18}
-          opacity={0.9}
-          lineCap="round"
-          className="shadow-glow-lg"
-        />
-      )}
-    </>
-  );
-}
 export function MapView() {
   const isMapOpen = useOSStore((s) => s.isMapOpen);
   const closeMap = useOSStore((s) => s.closeMap);
@@ -85,20 +17,76 @@ export function MapView() {
   const isSharingLive = useOSStore((s) => s.isSharingLive);
   const mapTheme = useOSStore((s) => s.settings.mapTheme);
   const currentPos = useOSStore((s) => s.currentPos);
-  const [showShare, setShowShare] = useState(false);
+  const mapRef = useRef<any>(null);
+  const [showShare, setShowShare] = React.useState(false);
+  // Sync Map View
+  useEffect(() => {
+    if (isMapOpen && currentPos && isFollowing && mapRef.current) {
+      mapRef.current.flyTo({
+        center: [currentPos[1], currentPos[0]],
+        zoom: 16,
+        essential: true
+      });
+    }
+  }, [currentPos, isFollowing, isMapOpen]);
+  const vectorStyle = useMemo(() => getVectorStyle(mapTheme), [mapTheme]);
+  const routeGeoJSON = useMemo(() => {
+    if (!activeRoute) return null;
+    return {
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: activeRoute.coordinates.map(c => [c[1], c[0]])
+      }
+    };
+  }, [activeRoute]);
   if (!isMapOpen) return null;
   const themeClass = `map-${mapTheme}-filter`;
   return (
-    <div className={cn("fixed inset-0 z-[100] bg-black", themeClass)}>
-      <MapContainer
-        center={currentPos || [40.7128, -74.0060]}
-        zoom={13}
-        minZoom={10}
-        zoomControl={false}
-        className="w-full h-full"
+    <div className={cn("fixed inset-0 z-[100] bg-black transition-opacity duration-500", themeClass)}>
+      <Map
+        ref={mapRef}
+        initialViewState={{
+          longitude: currentPos ? currentPos[1] : -74.006,
+          latitude: currentPos ? currentPos[0] : 40.7128,
+          zoom: 13
+        }}
+        mapStyle={vectorStyle}
+        onDragStart={() => setFollowing(false)}
+        style={{ width: '100%', height: '100%' }}
       >
-        <MapContent />
-      </MapContainer>
+        {currentPos && (
+          <Marker longitude={currentPos[1]} latitude={currentPos[0]}>
+            <div className="custom-user-icon w-10 h-10 bg-primary border-4 border-white rounded-full shadow-glow animate-pulse" />
+          </Marker>
+        )}
+        {useOSStore.getState().locations.map((loc) => (
+          <Marker key={loc.id} longitude={loc.lon} latitude={loc.lat}>
+            <div 
+              className="custom-pin-icon w-8 h-8 rounded-full border-4 border-white shadow-glow" 
+              style={{ 
+                backgroundColor: getCategoryColor(loc.category),
+                opacity: activeDestination?.id === loc.id ? 1 : 0.6,
+                transform: activeDestination?.id === loc.id ? 'scale(1.2)' : 'scale(1)'
+              }} 
+            />
+          </Marker>
+        ))}
+        {routeGeoJSON && (
+          <Source id="route-source" type="geojson" data={routeGeoJSON}>
+            <Layer
+              id="route-layer"
+              type="line"
+              layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+              paint={{
+                'line-color': '#3b82f6',
+                'line-width': 12,
+                'line-opacity': 0.8
+              }}
+            />
+          </Source>
+        )}
+      </Map>
       <div className="absolute top-8 left-32 right-8 z-[1000] flex justify-between items-start pointer-events-none">
         <div className="flex gap-4 pointer-events-auto">
           <Button
