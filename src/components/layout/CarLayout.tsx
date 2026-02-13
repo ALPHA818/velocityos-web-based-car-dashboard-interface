@@ -37,10 +37,12 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const openMap = useOSStore((s) => s.openMap);
   const closeMap = useOSStore((s) => s.closeMap);
   const setCurrentPos = useOSStore((s) => s.setCurrentPos);
+  const setGpsStatus = useOSStore((s) => s.setGpsStatus);
   const isSharingLive = useOSStore((s) => s.isSharingLive);
   const trackingId = useOSStore((s) => s.trackingId);
   const currentPos = useOSStore((s) => s.currentPos);
   const currentSpeed = useOSStore((s) => s.currentSpeed);
+  const gpsStatus = useOSStore((s) => s.gpsStatus);
   const isPlaying = useMediaStore((s) => s.isPlaying);
   const currentTrackIndex = useMediaStore((s) => s.currentTrackIndex);
   const volume = useMediaStore((s) => s.volume);
@@ -48,13 +50,13 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const setDuration = useMediaStore((s) => s.setDuration);
   const track = getTrack(currentTrackIndex);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const trackIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const trackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
-    if (isSharingLive && trackingId && currentPos) {
+    if (isSharingLive && trackingId && currentPos && gpsStatus === 'granted') {
       if (!trackIntervalRef.current) {
         trackIntervalRef.current = setInterval(async () => {
           try {
@@ -79,9 +81,21 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
       }
     }
     return () => {
-      if (trackIntervalRef.current) clearInterval(trackIntervalRef.current);
+      if (trackIntervalRef.current) {
+        clearInterval(trackIntervalRef.current);
+        trackIntervalRef.current = null;
+      }
     };
-  }, [isSharingLive, trackingId, currentPos, currentSpeed]);
+  }, [isSharingLive, trackingId, currentPos, currentSpeed, gpsStatus]);
+  useEffect(() => {
+    if (!navigator.permissions) return;
+    navigator.permissions.query({ name: 'geolocation' as any }).then((result) => {
+      setGpsStatus(result.state === 'granted' ? 'granted' : result.state === 'denied' ? 'denied' : 'prompt');
+      result.onchange = () => {
+        setGpsStatus(result.state === 'granted' ? 'granted' : result.state === 'denied' ? 'denied' : 'prompt');
+      };
+    }).catch(() => setGpsStatus('unsupported'));
+  }, [setGpsStatus]);
   useEffect(() => {
     let currentWakeLock: any = null;
     const handleVisibilityChange = async () => {
@@ -100,7 +114,12 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
     handleVisibilityChange();
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setCurrentPos([pos.coords.latitude, pos.coords.longitude], pos.coords.speed),
-      (err) => console.warn(`GPS Error: ${err.message}`),
+      (err) => {
+        // Silently handle permission policy errors in store to avoid repeated console warnings
+        if (err.code === err.PERMISSION_DENIED) {
+          setCurrentPos(null, 0, true);
+        }
+      },
       { enableHighAccuracy: true }
     );
     return () => {
@@ -126,7 +145,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
         <div className="mb-4 flex flex-col items-center gap-1">
           <span className="text-xl font-black text-primary tracking-tighter">VOS</span>
           <div className="flex gap-1 items-center">
-            <Wifi className="w-3 h-3 text-green-500" />
+            <Wifi className={cn("w-3 h-3", gpsStatus === 'granted' ? "text-green-500" : "text-destructive")} />
             <Battery className="w-3 h-3 text-white/50" />
           </div>
         </div>

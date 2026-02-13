@@ -7,6 +7,7 @@ import { MAP_TILES } from '@/lib/nav-utils';
 import { Navigation, Wifi, Info, Clock, Gauge } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { formatDistanceToNow } from 'date-fns';
+import type { TrackingState } from '@shared/types';
 const VehicleIcon = L.divIcon({
   className: 'vehicle-marker',
   html: `<div class="relative w-12 h-12 flex items-center justify-center">
@@ -27,12 +28,13 @@ function MapSync({ pos }: { pos: [number, number] }) {
 }
 export function TrackingPage() {
   const { id } = useParams();
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<TrackingState | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     const poll = async () => {
+      if (document.visibilityState !== 'visible') return;
       try {
-        const res = await api<any>(`/api/tracking/${id}`);
+        const res = await api<TrackingState>(`/api/tracking/${id}`);
         setData(res);
       } catch (err) {
         setError('Connection lost. The session may have ended.');
@@ -90,7 +92,9 @@ export function TrackingPage() {
               <Clock className="w-6 h-6 text-primary" />
               <div>
                 <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">Last Ping</div>
-                <div className="text-xl font-bold">{formatDistanceToNow(data.lastUpdate)} ago</div>
+                <div className="text-xl font-bold">
+                  {data.lastUpdate ? formatDistanceToNow(data.lastUpdate) : 'Just now'} ago
+                </div>
               </div>
             </div>
           </div>

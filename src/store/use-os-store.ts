@@ -3,12 +3,15 @@ import { persist } from 'zustand/middleware';
 import { api } from '@/lib/api-client';
 import type { UserSettings, SavedLocation } from '@shared/types';
 import { fetchRoute, RouteData } from '@/lib/nav-utils';
+export type GpsStatus = 'prompt' | 'granted' | 'denied' | 'unsupported';
 interface OSState {
   settings: UserSettings;
   locations: SavedLocation[];
   recentLocations: SavedLocation[];
   isLoading: boolean;
   error: string | null;
+  // Hardware Status
+  gpsStatus: GpsStatus;
   // Navigation State
   isMapOpen: boolean;
   isFollowing: boolean;
@@ -29,7 +32,8 @@ interface OSState {
   openMap: (dest?: SavedLocation) => void;
   closeMap: () => void;
   setFollowing: (following: boolean) => void;
-  setCurrentPos: (pos: [number, number], speed: number | null) => void;
+  setGpsStatus: (status: GpsStatus) => void;
+  setCurrentPos: (pos: [number, number] | null, speed: number | null, error?: boolean) => void;
   calculateRoute: () => Promise<void>;
   // Phase 8 Actions
   logRecentLocation: (loc: SavedLocation) => Promise<void>;
@@ -51,6 +55,7 @@ export const useOSStore = create<OSState>()(
       recentLocations: [],
       isLoading: false,
       error: null,
+      gpsStatus: 'prompt',
       isMapOpen: false,
       isFollowing: true,
       activeDestination: null,
@@ -141,7 +146,14 @@ export const useOSStore = create<OSState>()(
       },
       closeMap: () => set({ isMapOpen: false, activeDestination: null, activeRoute: null }),
       setFollowing: (isFollowing) => set({ isFollowing }),
-      setCurrentPos: (pos, speed) => set({ currentPos: pos, currentSpeed: speed }),
+      setGpsStatus: (status) => set({ gpsStatus: status }),
+      setCurrentPos: (pos, speed, error) => {
+        if (error) {
+          set({ gpsStatus: 'denied', currentSpeed: 0 });
+        } else {
+          set({ currentPos: pos, currentSpeed: speed, gpsStatus: 'granted' });
+        }
+      },
       calculateRoute: async () => {
         const { currentPos, activeDestination } = get();
         if (!currentPos || !activeDestination) return;
@@ -190,9 +202,9 @@ export const useOSStore = create<OSState>()(
     }),
     {
       name: 'velocity-os-storage',
-      partialize: (state) => ({ 
+      partialize: (state) => ({
         settings: state.settings,
-        recentLocations: state.recentLocations 
+        recentLocations: state.recentLocations
       }),
     }
   )

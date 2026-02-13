@@ -6,30 +6,26 @@ import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { usePWAInstall } from '@/hooks/use-pwa-install';
-import { 
-  AlertDialog, 
-  AlertDialogAction, 
-  AlertDialogCancel, 
-  AlertDialogContent, 
-  AlertDialogDescription, 
-  AlertDialogFooter, 
-  AlertDialogHeader, 
-  AlertDialogTitle, 
-  AlertDialogTrigger 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 export function SettingsPage() {
-  const settings = useOSStore((s) => s.settings);
+  const units = useOSStore((s) => s.settings.units);
+  const mapProvider = useOSStore((s) => s.settings.mapProvider);
+  const gpsStatus = useOSStore((s) => s.gpsStatus);
   const updateSettings = useOSStore((s) => s.updateSettings);
   const resetSystem = useOSStore((s) => s.resetSystem);
   const isLoading = useOSStore((s) => s.isLoading);
   const { isInstallable, install } = usePWAInstall();
-  const [gpsStatus, setGpsStatus] = React.useState<'active' | 'denied' | 'checking'>('checking');
-  React.useEffect(() => {
-    navigator.permissions?.query({ name: 'geolocation' as any }).then(p => 
-      setGpsStatus(p.state === 'granted' ? 'active' : p.state === 'denied' ? 'denied' : 'checking')
-    );
-  }, []);
   const handleReset = async () => {
     try {
       await resetSystem();
@@ -52,20 +48,20 @@ export function SettingsPage() {
               <h2 className="text-2xl font-bold">Distance Units</h2>
             </div>
             <RadioGroup
-              value={settings.units}
+              value={units}
               onValueChange={(val) => updateSettings({ units: val as 'mph' | 'kph' })}
               className="grid grid-cols-2 gap-4"
             >
               <Label
                 htmlFor="mph"
-                className={`flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer ${settings.units === 'mph' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'}`}
+                className={`flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer ${units === 'mph' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'}`}
               >
                 <RadioGroupItem value="mph" id="mph" className="sr-only" />
                 <span className="text-xl font-bold uppercase tracking-widest">Imperial (MPH)</span>
               </Label>
               <Label
                 htmlFor="kph"
-                className={`flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer ${settings.units === 'kph' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'}`}
+                className={`flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer ${units === 'kph' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'}`}
               >
                 <RadioGroupItem value="kph" id="kph" className="sr-only" />
                 <span className="text-xl font-bold uppercase tracking-widest">Metric (KPH)</span>
@@ -78,20 +74,20 @@ export function SettingsPage() {
               <h2 className="text-2xl font-bold">Default Map Provider</h2>
             </div>
             <RadioGroup
-              value={settings.mapProvider}
+              value={mapProvider}
               onValueChange={(val) => updateSettings({ mapProvider: val as 'google' | 'waze' })}
               className="grid grid-cols-2 gap-4"
             >
               <Label
                 htmlFor="google"
-                className={`flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer ${settings.mapProvider === 'google' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'}`}
+                className={`flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer ${mapProvider === 'google' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'}`}
               >
                 <RadioGroupItem value="google" id="google" className="sr-only" />
                 <span className="text-xl font-bold uppercase tracking-widest">Google Maps</span>
               </Label>
               <Label
                 htmlFor="waze"
-                className={`flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer ${settings.mapProvider === 'waze' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'}`}
+                className={`flex flex-col items-center justify-center h-24 rounded-2xl border-2 transition-all cursor-pointer ${mapProvider === 'waze' ? 'border-primary bg-primary/5' : 'border-white/5 bg-white/5'}`}
               >
                 <RadioGroupItem value="waze" id="waze" className="sr-only" />
                 <span className="text-xl font-bold uppercase tracking-widest">Waze</span>
@@ -106,10 +102,10 @@ export function SettingsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
                 <span className="font-medium">GPS Access</span>
-                {gpsStatus === 'active' ? (
+                {gpsStatus === 'granted' ? (
                   <div className="flex items-center gap-2 text-green-500"><CheckCircle className="w-5 h-5" /> Enabled</div>
                 ) : (
-                  <div className="flex items-center gap-2 text-destructive"><XCircle className="w-5 h-5" /> Denied</div>
+                  <div className="flex items-center gap-2 text-destructive"><XCircle className="w-5 h-5" /> {gpsStatus === 'denied' ? 'Denied' : 'Checking'}</div>
                 )}
               </div>
               <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">

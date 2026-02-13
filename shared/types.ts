@@ -23,6 +23,13 @@ export interface SavedLocation {
   category: LocationCategory;
   lastUsedAt?: number;
 }
+export interface TrackingState {
+  lat: number;
+  lon: number;
+  speed: number;
+  heading: number;
+  lastUpdate: number;
+}
 export interface Chat {
   id: string;
   title: string;

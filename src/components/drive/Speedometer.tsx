@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { formatSpeed, haversineDistance } from '@/lib/drive-utils';
 import { Navigation } from 'lucide-react';
 import { useOSStore } from '@/store/use-os-store';
+import { cn } from '@/lib/utils';
 export function Speedometer() {
   const currentPos = useOSStore((s) => s.currentPos);
   const currentSpeed = useOSStore((s) => s.currentSpeed);
@@ -41,16 +42,15 @@ export function Speedometer() {
       </div>
       <div className="mt-6 flex gap-3">
         {[1, 2, 3].map((i) => (
-          <div 
-            key={i} 
+          <div
+            key={i}
             className={cn(
               "h-2 w-12 rounded-full transition-colors duration-500",
               displaySpeed > i * 20 ? "bg-primary shadow-glow" : "bg-zinc-800"
-            )} 
+            )}
           />
         ))}
       </div>
     </div>
   );
 }
-import { cn } from '@/lib/utils';

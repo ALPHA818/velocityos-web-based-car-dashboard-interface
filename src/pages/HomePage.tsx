@@ -7,12 +7,13 @@ import { MiniPlayer } from '@/components/drive/MiniPlayer';
 import { Toaster } from '@/components/ui/sonner';
 import { motion } from 'framer-motion';
 import { useOSStore } from '@/store/use-os-store';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, MapPinOff } from 'lucide-react';
 export function HomePage() {
   const fetchSettings = useOSStore((s) => s.fetchSettings);
   const fetchLocations = useOSStore((s) => s.fetchLocations);
   const locations = useOSStore((s) => s.locations);
   const openMap = useOSStore((s) => s.openMap);
+  const gpsStatus = useOSStore((s) => s.gpsStatus);
   useEffect(() => {
     fetchSettings();
     fetchLocations();
@@ -31,6 +32,12 @@ export function HomePage() {
           animate={{ opacity: 1, y: 0 }}
           className="col-span-8 row-span-4 dashboard-card flex items-center justify-center relative overflow-hidden"
         >
+          {gpsStatus === 'denied' && (
+            <div className="absolute top-6 left-6 z-10 px-4 py-2 bg-destructive/20 border border-destructive/30 rounded-full flex items-center gap-2">
+              <MapPinOff className="w-4 h-4 text-destructive" />
+              <span className="text-xs font-black text-destructive uppercase tracking-widest">No GPS Signal</span>
+            </div>
+          )}
           <div className="absolute top-0 left-0 p-4 opacity-5 pointer-events-none">
             <span className="text-9xl font-black">DRIVE</span>
           </div>
