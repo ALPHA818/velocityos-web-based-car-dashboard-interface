@@ -11,6 +11,7 @@ export interface UserSettings {
   id: string; // usually 'default' or userId
   units: 'mph' | 'kph';
   mapProvider: 'google' | 'waze';
+  mapTheme: 'light' | 'dark' | 'vibrant';
   theme: 'dark' | 'light';
 }
 export type LocationCategory = 'home' | 'work' | 'favorite' | 'recent';

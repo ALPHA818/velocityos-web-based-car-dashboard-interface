@@ -14,6 +14,7 @@ export class SettingsEntity extends IndexedEntity<UserSettings> {
     id: "default",
     units: "mph",
     mapProvider: "google",
+    mapTheme: "vibrant",
     theme: "dark"
   };
 }

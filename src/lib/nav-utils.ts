@@ -24,10 +24,21 @@ export const fetchRoute = async (start: [number, number], end: [number, number])
     return null;
   }
 };
-export const MAP_TILES = {
-  url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-  attribution: '&copy; OpenStreetMap &copy; CARTO',
+export const MAP_THEMES = {
+  light: {
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    filter: 'none'
+  },
+  dark: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    filter: 'brightness(0.6) contrast(1.2) saturate(0.8)'
+  },
+  vibrant: {
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    filter: 'invert(1) hue-rotate(240deg) brightness(0.8) contrast(1.2) saturate(1.5)'
+  }
 };
+export const MAP_TILES = MAP_THEMES.vibrant; // Default fallback
 export const getCategoryColor = (category: string) => {
   switch (category) {
     case 'home': return '#3b82f6';

@@ -1,7 +1,7 @@
 import React from 'react';
 import { CarLayout } from '@/components/layout/CarLayout';
 import { useOSStore } from '@/store/use-os-store';
-import { Ruler, Map, LogOut, Info, Download, CheckCircle, XCircle } from 'lucide-react';
+import { Ruler, Map, LogOut, Info, Download, CheckCircle, XCircle, Sun, Moon, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 export function SettingsPage() {
   const units = useOSStore((s) => s.settings.units);
   const mapProvider = useOSStore((s) => s.settings.mapProvider);
+  const mapTheme = useOSStore((s) => s.settings.mapTheme);
   const gpsStatus = useOSStore((s) => s.gpsStatus);
   const updateSettings = useOSStore((s) => s.updateSettings);
   const resetSystem = useOSStore((s) => s.resetSystem);
@@ -42,6 +43,33 @@ export function SettingsPage() {
           <p className="text-muted-foreground mt-1">Configure your driving experience</p>
         </header>
         <div className="space-y-6">
+          <section className="dashboard-card space-y-6">
+            <div className="flex items-center gap-4">
+              <Sparkles className="w-8 h-8 text-primary" />
+              <h2 className="text-2xl font-bold">Map Appearance</h2>
+            </div>
+            <RadioGroup
+              value={mapTheme}
+              onValueChange={(val) => updateSettings({ mapTheme: val as any })}
+              className="grid grid-cols-3 gap-4"
+            >
+              {[
+                { id: 'light', label: 'Light', icon: Sun },
+                { id: 'dark', label: 'Night', icon: Moon },
+                { id: 'vibrant', label: 'Vibrant', icon: Sparkles },
+              ].map((t) => (
+                <Label
+                  key={t.id}
+                  htmlFor={t.id}
+                  className={`flex flex-col items-center justify-center h-32 rounded-3xl border-2 transition-all cursor-pointer gap-2 ${mapTheme === t.id ? 'border-primary bg-primary/10' : 'border-white/5 bg-white/5'}`}
+                >
+                  <RadioGroupItem value={t.id} id={t.id} className="sr-only" />
+                  <t.icon className={cn("w-8 h-8", mapTheme === t.id ? "text-primary" : "text-muted-foreground")} />
+                  <span className="text-lg font-bold uppercase tracking-widest">{t.label}</span>
+                </Label>
+              ))}
+            </RadioGroup>
+          </section>
           <section className="dashboard-card space-y-6">
             <div className="flex items-center gap-4">
               <Ruler className="w-8 h-8 text-primary" />

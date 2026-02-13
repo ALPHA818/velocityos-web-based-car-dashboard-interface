@@ -4,8 +4,8 @@ import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useOSStore } from '@/store/use-os-store';
-import { MAP_TILES, getCategoryColor, formatETA } from '@/lib/nav-utils';
-import { X, LocateFixed, Navigation, Share2, Plus, Minus, Compass } from 'lucide-react';
+import { MAP_THEMES, getCategoryColor, formatETA } from '@/lib/nav-utils';
+import { X, Navigation, Share2, Compass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TrackingOverlay } from './TrackingOverlay';
 const UserIcon = L.divIcon({
@@ -16,9 +16,9 @@ const UserIcon = L.divIcon({
 });
 const getColoredIcon = (color: string) => L.divIcon({
   className: 'custom-pin-icon',
-  html: `<div class="w-6 h-6 rounded-full border-2 border-white shadow-md" style="background-color: ${color}"></div>`,
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
+  html: `<div class="w-8 h-8 rounded-full border-4 border-white shadow-glow" style="background-color: ${color}"></div>`,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
 });
 function MapContent() {
   const map = useMap();
@@ -29,6 +29,7 @@ function MapContent() {
   const isMapOpen = useOSStore((s) => s.isMapOpen);
   const activeDestination = useOSStore((s) => s.activeDestination);
   const locations = useOSStore((s) => s.locations);
+  const mapTheme = useOSStore((s) => s.settings.mapTheme);
   useEffect(() => {
     if (isMapOpen) {
       setTimeout(() => map.invalidateSize(), 150);
@@ -46,9 +47,10 @@ function MapContent() {
       map.setView(currentPos, 16, { animate: true });
     }
   }, [activeRoute, currentPos, isFollowing, map]);
+  const themeConfig = MAP_THEMES[mapTheme] || MAP_THEMES.vibrant;
   return (
     <>
-      <TileLayer {...MAP_TILES} />
+      <TileLayer url={themeConfig.url} attribution="&copy; OpenStreetMap &copy; CARTO" />
       {currentPos && (
         <Marker position={currentPos} icon={UserIcon} zIndexOffset={1000} />
       )}
@@ -56,7 +58,7 @@ function MapContent() {
         <Marker
           key={loc.id}
           position={[loc.lat, loc.lon]}
-          opacity={activeDestination?.id === loc.id ? 1 : 0.6}
+          opacity={activeDestination?.id === loc.id ? 1 : 0.7}
           icon={getColoredIcon(getCategoryColor(loc.category))}
         />
       ))}
@@ -64,9 +66,10 @@ function MapContent() {
         <Polyline
           positions={activeRoute.coordinates}
           color="#3b82f6"
-          weight={12}
-          opacity={0.8}
+          weight={14}
+          opacity={0.85}
           lineCap="round"
+          className="shadow-glow"
         />
       )}
     </>
@@ -81,19 +84,21 @@ export function MapView() {
   const isFollowing = useOSStore((s) => s.isFollowing);
   const setFollowing = useOSStore((s) => s.setFollowing);
   const isSharingLive = useOSStore((s) => s.isSharingLive);
+  const mapTheme = useOSStore((s) => s.settings.mapTheme);
   const [showShare, setShowShare] = useState(false);
   if (!isMapOpen) return null;
+  const themeClass = `map-${mapTheme}-filter`;
   return (
-    <div className="fixed inset-0 z-[100] bg-black">
+    <div className={cn("fixed inset-0 z-[100] bg-black", themeClass)}>
       <MapContainer
         center={currentPos || [40.7128, -74.0060]}
         zoom={13}
+        minZoom={10}
         zoomControl={false}
         className="w-full h-full"
       >
         <MapContent />
       </MapContainer>
-      {/* Top UI */}
       <div className="absolute top-8 left-32 right-8 z-[1000] flex justify-between items-start pointer-events-none">
         <div className="flex gap-4 pointer-events-auto">
           <Button
@@ -129,7 +134,6 @@ export function MapView() {
           </Button>
         </div>
       </div>
-      {/* Bottom Controls */}
       <div className="absolute bottom-8 right-8 z-[1000] flex flex-col gap-4">
          <Button
           variant={isFollowing ? "default" : "secondary"}
@@ -143,7 +147,6 @@ export function MapView() {
           <Compass className={cn("w-10 h-10", isFollowing && "animate-pulse")} />
         </Button>
       </div>
-      {/* ETA Panel */}
       {activeRoute && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[1000] w-[600px] pointer-events-none">
           <div className="bg-zinc-900/80 backdrop-blur-2xl border border-white/10 rounded-[3rem] p-8 flex items-center justify-between shadow-glow-lg pointer-events-auto">

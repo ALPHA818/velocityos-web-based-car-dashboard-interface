@@ -45,24 +45,28 @@
     scrollbar-width: none;
   }
 }
-/* Leaflet Dark Mode & UI Overrides */
 @import "leaflet/dist/leaflet.css";
 .leaflet-container {
   background: #000000 !important;
   width: 100%;
   height: 100%;
 }
-.leaflet-tile-pane {
-  /* High contrast night-driving filter */
-  filter: invert(1) hue-rotate(180deg) brightness(0.6) contrast(1.4) saturate(0.5);
+/* Theme Filters */
+.map-vibrant-filter .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(240deg) brightness(0.8) contrast(1.2) saturate(1.5);
 }
-.leaflet-control-container .leaflet-top, 
-.leaflet-control-container .leaflet-bottom {
-  z-index: 1001;
+.map-dark-filter .leaflet-tile-pane {
+  filter: brightness(0.6) contrast(1.2) saturate(0.8);
 }
-/* Ensure the user marker dot isn't inverted by the tile-pane filter */
-.custom-user-icon {
+.map-light-filter .leaflet-tile-pane {
+  filter: none;
+}
+/* Ensure UI and Markers are not filtered */
+.leaflet-control-container, 
+.custom-user-icon, 
+.custom-pin-icon {
   z-index: 2000 !important;
+  filter: none !important;
 }
 @layer components {
   .dashboard-card {

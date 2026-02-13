@@ -10,16 +10,13 @@ interface OSState {
   recentLocations: SavedLocation[];
   isLoading: boolean;
   error: string | null;
-  // Hardware Status
   gpsStatus: GpsStatus;
-  // Navigation State
   isMapOpen: boolean;
   isFollowing: boolean;
   activeDestination: SavedLocation | null;
   activeRoute: RouteData | null;
   currentPos: [number, number] | null;
   currentSpeed: number | null;
-  // Tracking
   trackingId: string | null;
   isSharingLive: boolean;
   fetchSettings: () => Promise<void>;
@@ -28,14 +25,12 @@ interface OSState {
   addLocation: (loc: Omit<SavedLocation, 'id'>) => Promise<void>;
   removeLocation: (id: string) => Promise<void>;
   resetSystem: () => Promise<void>;
-  // Navigation Actions
   openMap: (dest?: SavedLocation) => void;
   closeMap: () => void;
   setFollowing: (following: boolean) => void;
   setGpsStatus: (status: GpsStatus) => void;
   setCurrentPos: (pos: [number, number] | null, speed: number | null, error?: boolean) => void;
   calculateRoute: () => Promise<void>;
-  // Phase 8 Actions
   logRecentLocation: (loc: SavedLocation) => Promise<void>;
   startLiveShare: () => void;
   stopLiveShare: () => void;
@@ -49,6 +44,7 @@ export const useOSStore = create<OSState>()(
         id: 'default',
         units: 'mph',
         mapProvider: 'google',
+        mapTheme: 'vibrant',
         theme: 'dark',
       },
       locations: [],
@@ -119,7 +115,7 @@ export const useOSStore = create<OSState>()(
         try {
           await api('/api/system/reset', { method: 'POST' });
           set({
-            settings: { id: 'default', units: 'mph', mapProvider: 'google', theme: 'dark' },
+            settings: { id: 'default', units: 'mph', mapProvider: 'google', mapTheme: 'vibrant', theme: 'dark' },
             locations: [],
             recentLocations: [],
             isLoading: false,
