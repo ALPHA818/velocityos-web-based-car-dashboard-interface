@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { formatSpeed } from '@/lib/drive-utils';
+import { formatSpeed, haversineDistance } from '@/lib/drive-utils';
 import { Navigation } from 'lucide-react';
 import { useOSStore } from '@/store/use-os-store';
 export function Speedometer() {
   const [speed, setSpeed] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
+  const prevRef = React.useRef<{ coords: { latitude: number; longitude: number }; timestamp: number } | null>(null);
   const units = useOSStore((s) => s.settings.units);
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -13,13 +14,27 @@ export function Speedometer() {
     }
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
-        const s = position.coords.speed;
-        setSpeed(formatSpeed(s, units));
+        const { coords, timestamp } = position;
+        if (prevRef.current) {
+          const prev = prevRef.current;
+          const dt = (timestamp - prev.timestamp) / 1000;
+          if (dt > 0.5 && dt < 30) {
+            const dist = haversineDistance(coords.latitude, coords.longitude, prev.coords.latitude, prev.coords.longitude);
+            const computedSpeed = dist / dt;
+            const gpsSpeed = coords.speed || 0;
+            const s = (computedSpeed + gpsSpeed) / 2;
+            setSpeed(formatSpeed(s, units));
+          } else {
+            setSpeed(formatSpeed(coords.speed || 0, units));
+          }
+        } else {
+          setSpeed(formatSpeed(coords.speed || 0, units));
+        }
+        prevRef.current = { coords: { latitude: coords.latitude, longitude: coords.longitude }, timestamp };
       },
       (err) => {
         if (err.code === 1) {
           setError("Location Denied");
-          console.warn("GPS Permission Denied");
         } else {
           setError(`GPS Error (${err.code})`);
           console.error(`Geolocation error: ${err.message}`);
