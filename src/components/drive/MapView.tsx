@@ -3,7 +3,8 @@ import { cn } from '@/lib/utils';
 import Map, { Source, Layer, Marker } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useOSStore } from '@/store/use-os-store';
-import { getCategoryColor, formatETA, getVectorStyle } from '@/lib/nav-utils';
+import { getCategoryColor, formatETA, getMapStyle, getMapFilter } from '@/lib/nav-utils';
+import type { GeoJSON } from 'geojson';
 import { X, Navigation, Share2, Compass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TrackingOverlay } from './TrackingOverlay';
@@ -33,6 +34,32 @@ export function MapView() {
       });
     }
   }, [currentPos, isFollowing, isMapOpen]);
+
+  // Apply map theme filter
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (map) {
+      const canvas = map.getCanvas();
+      canvas.style.filter = getMapFilter(mapTheme);
+    }
+  }, [mapTheme, isMapOpen]);
+
+  // Handle offline/online status
+  useEffect(() => {
+    const handleStatus = () => {
+      const map = mapRef.current?.getMap();
+      if (!map) return;
+      const canvas = map.getCanvas();
+      canvas.style.filter = navigator.onLine ? getMapFilter(mapTheme) : 'grayscale(1) saturate(0) brightness(0.6)';
+    };
+
+    window.addEventListener('online', handleStatus);
+    window.addEventListener('offline', handleStatus);
+    return () => {
+      window.removeEventListener('online', handleStatus);
+      window.removeEventListener('offline', handleStatus);
+    };
+  }, [mapTheme]);
   // Handle auto-follow re-engagement
   const handleMapInteraction = () => {
     if (isFollowing) setFollowing(false);
@@ -41,7 +68,7 @@ export function MapView() {
       setFollowing(true);
     }, 10000);
   };
-  const vectorStyle = useMemo(() => getVectorStyle(mapTheme), [mapTheme]);
+  const mapStyle = useMemo(() => getMapStyle(mapTheme), [mapTheme]);
   const routeGeoJSON = useMemo((): GeoJSON.Feature<GeoJSON.LineString> | null => {
     if (!activeRoute) return null;
     return {
@@ -66,7 +93,7 @@ export function MapView() {
           zoom: 13,
           pitch: 45
         }}
-        mapStyle={vectorStyle}
+        mapStyle={mapStyle}
         onDrag={handleMapInteraction}
         onWheel={handleMapInteraction}
         style={{ width: '100%', height: '100%' }}

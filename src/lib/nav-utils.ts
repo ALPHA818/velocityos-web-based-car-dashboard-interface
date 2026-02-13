@@ -24,24 +24,22 @@ export const fetchRoute = async (start: [number, number], end: [number, number])
     return null;
   }
 };
-export const getVectorStyle = (theme: string): any => {
+export const getMapStyle = (theme: string): any => {
   const isHighway = theme === 'highway';
   const isDark = theme === 'dark' || isHighway;
-  const isVibrant = theme === 'vibrant';
   const bgColor = isHighway ? '#020617' : isDark ? '#09090b' : '#f8fafc';
-  const roadColor = isHighway ? '#3b82f6' : isDark ? '#334155' : '#94a3b8';
-  const highwayColor = isHighway ? '#60a5fa' : isVibrant ? '#10b981' : '#3b82f6';
-  const landColor = isDark ? '#111827' : '#f1f5f9';
-  const waterColor = isHighway ? '#0f172a' : isVibrant ? '#06b6d4' : isDark ? '#1e3a8a' : '#bfdbfe';
   return {
     version: 8,
-    // Add public glyphs for labels
-    glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
     sources: {
-      protomaps: {
-        type: 'vector',
-        tiles: ['https://api.protomaps.com/tiles/v3/{z}/{x}/{y}.mvt'],
-        attribution: 'Protomaps © OpenStreetMap'
+      openmap: {
+        type: 'raster',
+        tiles: [
+          'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+        ],
+        tileSize: 256,
+        attribution: '© OpenStreetMap contributors'
       }
     },
     layers: [
@@ -51,62 +49,9 @@ export const getVectorStyle = (theme: string): any => {
         paint: { 'background-color': bgColor }
       },
       {
-        id: 'water',
-        type: 'fill',
-        source: 'protomaps',
-        'source-layer': 'water',
-        paint: { 'fill-color': waterColor, 'fill-opacity': 0.6 }
-      },
-      {
-        id: 'landuse',
-        type: 'fill',
-        source: 'protomaps',
-        'source-layer': 'landuse',
-        paint: { 'fill-color': landColor, 'fill-opacity': 0.8 }
-      },
-      {
-        id: 'roads',
-        type: 'line',
-        source: 'protomaps',
-        'source-layer': 'roads',
-        filter: ['!=', ['get', 'kind'], 'highway'],
-        paint: {
-          'line-color': roadColor,
-          'line-width': isHighway ? 2 : 1.5,
-          'line-opacity': 0.5
-        }
-      },
-      {
-        id: 'highways',
-        type: 'line',
-        source: 'protomaps',
-        'source-layer': 'roads',
-        filter: ['==', ['get', 'kind'], 'highway'],
-        paint: {
-          'line-color': highwayColor,
-          'line-width': isHighway ? 5 : 3,
-          'line-blur': isHighway ? 2 : 0,
-          'line-opacity': 1
-        }
-      },
-      {
-        id: 'road-labels',
-        type: 'symbol',
-        source: 'protomaps',
-        'source-layer': 'roads',
-        layout: {
-          'text-field': ['get', 'name'],
-          'text-font': ['Noto Sans Regular'],
-          'text-size': 14,
-          'symbol-placement': 'line',
-          'text-letter-spacing': 0.05
-        },
-        paint: {
-          'text-color': isDark ? '#ffffff' : '#000000',
-          'text-halo-color': bgColor,
-          'text-halo-width': 1.5,
-          'text-opacity': 0.9
-        }
+        id: 'openmap-layer',
+        type: 'raster',
+        source: 'openmap'
       }
     ]
   };
@@ -120,6 +65,16 @@ export const getCategoryColor = (category: string) => {
     default: return '#64748b';
   }
 };
+export const getMapFilter = (theme: string): string => {
+  switch (theme) {
+    case 'dark': return 'sepia(0) contrast(1.25) brightness(0.58) invert(0.85) hue-rotate(160deg)';
+    case 'highway': return 'contrast(1.4) saturate(2) hue-rotate(220deg) brightness(1.1)';
+    case 'vibrant': return 'saturate(1.6) contrast(1.3) brightness(1.05) hue-rotate(10deg)';
+    case 'offline': return 'grayscale(1) saturate(0) brightness(0.6)';
+    default: return 'none';
+  }
+};
+
 export const formatETA = (durationSeconds: number): string => {
   const arrivalDate = new Date(Date.now() + durationSeconds * 1000);
   return format(arrivalDate, 'HH:mm');

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import Map, { Marker } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { getVectorStyle } from '@/lib/nav-utils';
+import { getMapStyle, getMapFilter } from '@/lib/nav-utils';
 import { Wifi, Clock, Gauge } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { formatDistanceToNow } from 'date-fns';
@@ -12,7 +12,14 @@ export function TrackingPage() {
   const [data, setData] = useState<TrackingState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mapRef = useRef<any>(null);
-  const vectorStyle = useMemo(() => getVectorStyle('dark'), []);
+  const mapStyle = useMemo(() => getMapStyle('dark'), []);
+
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (map) {
+      map.getCanvas().style.filter = getMapFilter('dark');
+    }
+  }, []);
   useEffect(() => {
     const poll = async () => {
       if (document.visibilityState !== 'visible') return;
@@ -30,6 +37,13 @@ export function TrackingPage() {
     const interval = setInterval(poll, 10000);
     return () => clearInterval(interval);
   }, [id]);
+
+  useEffect(() => {
+    const canvas = mapRef.current?.getMap()?.getCanvas();
+    if (canvas) {
+      canvas.style.filter = navigator.onLine ? getMapFilter('dark') : 'grayscale(1) saturate(0) brightness(0.6)';
+    }
+  }, [navigator.onLine]);
   if (error) return (
     <div className="h-screen w-screen bg-black flex flex-col items-center justify-center text-white p-10">
       <div className="p-10 bg-zinc-900 rounded-[3rem] border border-white/10 text-center space-y-6">
@@ -63,7 +77,7 @@ export function TrackingPage() {
             latitude: data.lat,
             zoom: 15
           }}
-          mapStyle={vectorStyle}
+          mapStyle={mapStyle}
           style={{ width: '100%', height: '100%' }}
         >
           <Marker longitude={data.lon} latitude={data.lat}>
