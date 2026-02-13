@@ -77,7 +77,9 @@ function updateWranglerJsonc() {
 }
 
 function runSetupCommands() {
-    const commands = [];
+    const commands = [
+    "bun add react-player@^2.16.0"
+];
     
     if (commands.length === 0) {
         console.log('⊘ No setup commands to run');
