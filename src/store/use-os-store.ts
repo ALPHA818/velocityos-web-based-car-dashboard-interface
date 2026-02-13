@@ -7,12 +7,12 @@ interface OSState {
   locations: SavedLocation[];
   isLoading: boolean;
   error: string | null;
-  // Actions
   fetchSettings: () => Promise<void>;
   updateSettings: (patch: Partial<UserSettings>) => Promise<void>;
   fetchLocations: () => Promise<void>;
   addLocation: (loc: Omit<SavedLocation, 'id'>) => Promise<void>;
   removeLocation: (id: string) => Promise<void>;
+  resetSystem: () => Promise<void>;
 }
 export const useOSStore = create<OSState>()(
   persist(
@@ -76,6 +76,28 @@ export const useOSStore = create<OSState>()(
           set({ error: err.message });
         }
       },
+      resetSystem: async () => {
+        set({ isLoading: true });
+        try {
+          await api('/api/system/reset', { method: 'POST' });
+          const defaultSettings: UserSettings = {
+            id: 'default',
+            units: 'mph',
+            mapProvider: 'google',
+            theme: 'dark',
+          };
+          set({ 
+            settings: defaultSettings, 
+            locations: [], 
+            isLoading: false,
+            error: null 
+          });
+          localStorage.removeItem('velocity-os-storage');
+        } catch (err: any) {
+          set({ error: err.message, isLoading: false });
+          throw err;
+        }
+      }
     }),
     {
       name: 'velocity-os-storage',

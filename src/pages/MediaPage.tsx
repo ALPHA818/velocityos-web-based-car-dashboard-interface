@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactPlayer from 'react-player';
 import { CarLayout } from '@/components/layout/CarLayout';
-import { useMediaStore, getCurrentTrack } from '@/store/use-media-store';
+import { useMediaStore, getTrack } from '@/store/use-media-store';
 import { Play, Pause, SkipForward, SkipBack, Volume2 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,14 +16,20 @@ export function MediaPage() {
   const prevTrack = useMediaStore((s) => s.prevTrack);
   const setProgress = useMediaStore((s) => s.setProgress);
   const setDuration = useMediaStore((s) => s.setDuration);
-  const track = getCurrentTrack({ currentTrackIndex } as any);
+  const setVolume = useMediaStore((s) => s.setVolume);
+  const track = getTrack(currentTrackIndex);
   const handleProgress = (state: { played: number }) => {
     if (isPlaying) setProgress(state.played * 100);
+  };
+  const formatTime = (seconds: number) => {
+    if (isNaN(seconds)) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${String(secs).padStart(2, '0')}`;
   };
   return (
     <CarLayout>
       <div className="h-full flex flex-col md:flex-row gap-12 items-center">
-        {/* ReactPlayer hidden core */}
         <div className="hidden">
           <ReactPlayer
             url={track.url}
@@ -35,7 +41,6 @@ export function MediaPage() {
             height="0"
           />
         </div>
-        {/* Album Art Section */}
         <div className="w-full md:w-1/2 aspect-square max-w-[500px] relative group">
           <AnimatePresence mode="wait">
             <motion.img
@@ -49,17 +54,16 @@ export function MediaPage() {
             />
           </AnimatePresence>
           {isPlaying && (
-            <motion.div 
+            <motion.div
               animate={{ scale: [1, 1.05, 1] }}
               transition={{ repeat: Infinity, duration: 2 }}
               className="absolute -inset-4 bg-primary/20 blur-3xl -z-10"
             />
           )}
         </div>
-        {/* Controls Section */}
         <div className="flex-1 w-full space-y-12">
           <div className="space-y-2">
-            <motion.h1 
+            <motion.h1
               key={track.title}
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -67,7 +71,7 @@ export function MediaPage() {
             >
               {track.title}
             </motion.h1>
-            <motion.p 
+            <motion.p
               key={track.artist}
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -86,16 +90,16 @@ export function MediaPage() {
               onValueChange={(vals) => setProgress(vals[0])}
             />
             <div className="flex justify-between text-xl font-mono text-muted-foreground">
-              <span>{Math.floor((progress / 100) * duration / 60)}:{String(Math.floor(((progress / 100) * duration) % 60)).padStart(2, '0')}</span>
-              <span>{Math.floor(duration / 60)}:{String(Math.floor(duration % 60)).padStart(2, '0')}</span>
+              <span>{formatTime((progress / 100) * duration)}</span>
+              <span>{formatTime(duration)}</span>
             </div>
           </div>
           <div className="flex items-center justify-center gap-12">
             <button onClick={prevTrack} className="touch-target text-muted-foreground hover:text-foreground active:scale-90 transition-all">
               <SkipBack className="w-16 h-16 fill-current" />
             </button>
-            <button 
-              onClick={togglePlay} 
+            <button
+              onClick={togglePlay}
               className="w-32 h-32 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-glow-lg hover:scale-105 active:scale-95 transition-all"
             >
               {isPlaying ? <Pause className="w-16 h-16 fill-current" /> : <Play className="w-16 h-16 fill-current ml-2" />}
@@ -109,7 +113,7 @@ export function MediaPage() {
             <Slider
               value={[volume * 100]}
               max={100}
-              onValueChange={(vals) => useMediaStore.getState().setVolume(vals[0] / 100)}
+              onValueChange={(vals) => setVolume(vals[0] / 100)}
               className="flex-1"
             />
           </div>

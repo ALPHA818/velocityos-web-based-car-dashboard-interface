@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { CarLayout } from '@/components/layout/CarLayout';
 import { useOSStore } from '@/store/use-os-store';
-import { MapPin, Home, Briefcase, Star, Plus, Compass, X } from 'lucide-react';
-import { getWazeLink, getGoogleMapsLink } from '@/lib/drive-utils';
+import { MapPin, Home, Briefcase, Star, Plus, Compass } from 'lucide-react';
+import { getWazeLink, getGoogleMapsLink, isValidCoordinate } from '@/lib/drive-utils';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -38,14 +38,22 @@ export function NavigationHub() {
   };
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.label || !formData.lat || !formData.lon) {
-      toast.error('Please fill in required fields');
+    if (!formData.label.trim()) {
+      toast.error('Label is required');
+      return;
+    }
+    if (!isValidCoordinate(formData.lat, 'lat')) {
+      toast.error('Invalid Latitude (-90 to 90)');
+      return;
+    }
+    if (!isValidCoordinate(formData.lon, 'lon')) {
+      toast.error('Invalid Longitude (-180 to 180)');
       return;
     }
     try {
       await addLocation({
-        label: formData.label,
-        address: formData.address,
+        label: formData.label.trim(),
+        address: formData.address.trim() || 'Saved Location',
         category: formData.category,
         lat: parseFloat(formData.lat),
         lon: parseFloat(formData.lon),
@@ -79,31 +87,32 @@ export function NavigationHub() {
               <form onSubmit={handleSave} className="space-y-6 pt-4">
                 <div className="space-y-2">
                   <Label htmlFor="label">Label (e.g. Grandma's House)</Label>
-                  <Input 
-                    id="label" 
-                    value={formData.label} 
-                    onChange={e => setFormData(p => ({...p, label: e.target.value}))} 
+                  <Input
+                    id="label"
+                    placeholder="Grandma's House"
+                    value={formData.label}
+                    onChange={e => setFormData(p => ({...p, label: e.target.value}))}
                     className="h-14 bg-zinc-800 border-white/5 rounded-xl"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="lat">Latitude</Label>
-                    <Input 
-                      id="lat" 
+                    <Input
+                      id="lat"
                       placeholder="40.7128"
-                      value={formData.lat} 
-                      onChange={e => setFormData(p => ({...p, lat: e.target.value}))} 
+                      value={formData.lat}
+                      onChange={e => setFormData(p => ({...p, lat: e.target.value}))}
                       className="h-14 bg-zinc-800 border-white/5 rounded-xl"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="lon">Longitude</Label>
-                    <Input 
-                      id="lon" 
+                    <Input
+                      id="lon"
                       placeholder="-74.0060"
-                      value={formData.lon} 
-                      onChange={e => setFormData(p => ({...p, lon: e.target.value}))} 
+                      value={formData.lon}
+                      onChange={e => setFormData(p => ({...p, lon: e.target.value}))}
                       className="h-14 bg-zinc-800 border-white/5 rounded-xl"
                     />
                   </div>
