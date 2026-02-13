@@ -25,12 +25,13 @@ export const fetchRoute = async (start: [number, number], end: [number, number])
   }
 };
 export const getVectorStyle = (theme: string): any => {
-  const isDark = theme === 'dark' || theme === 'highway';
-  const bgColor = isDark ? '#09090b' : '#ffffff';
-  const roadColor = isDark ? '#4a5568' : '#cbd5e0';
-  const buildingColor = isDark ? '#18181b' : '#edf2f7';
-  const waterColor = '#4299e1';
-  const landColor = '#48bb78';
+  const isHighway = theme === 'highway';
+  const isDark = theme === 'dark' || isHighway;
+  const bgColor = isHighway ? '#020617' : isDark ? '#09090b' : '#f8fafc';
+  const roadColor = isHighway ? '#3b82f6' : isDark ? '#334155' : '#94a3b8';
+  const highwayColor = isHighway ? '#60a5fa' : '#3b82f6';
+  const landColor = isDark ? '#111827' : '#f1f5f9';
+  const waterColor = isDark ? '#1e3a8a' : '#bfdbfe';
   return {
     version: 8,
     sources: {
@@ -51,58 +52,72 @@ export const getVectorStyle = (theme: string): any => {
         type: 'fill',
         source: 'protomaps',
         'source-layer': 'water',
-        paint: { 'fill-color': waterColor }
+        paint: { 'fill-color': waterColor, 'fill-opacity': 0.6 }
       },
       {
         id: 'landuse',
         type: 'fill',
         source: 'protomaps',
         'source-layer': 'landuse',
-        paint: { 'fill-color': landColor, 'fill-opacity': 0.2 }
-      },
-      {
-        id: 'buildings',
-        type: 'fill',
-        source: 'protomaps',
-        'source-layer': 'buildings',
-        paint: { 'fill-color': buildingColor, 'fill-opacity': 0.8 }
+        paint: { 'fill-color': landColor, 'fill-opacity': 0.8 }
       },
       {
         id: 'roads',
         type: 'line',
         source: 'protomaps',
         'source-layer': 'roads',
+        filter: ['!=', ['get', 'kind'], 'highway'],
         paint: {
           'line-color': roadColor,
-          'line-width': theme === 'highway' ? 3 : 1.5
+          'line-width': isHighway ? 2 : 1.5,
+          'line-opacity': 0.5
         }
       },
       {
-        id: 'boundaries',
+        id: 'highways',
         type: 'line',
         source: 'protomaps',
-        'source-layer': 'boundaries',
-        paint: { 'line-color': '#718096', 'line-dasharray': [2, 2] }
+        'source-layer': 'roads',
+        filter: ['==', ['get', 'kind'], 'highway'],
+        paint: {
+          'line-color': highwayColor,
+          'line-width': isHighway ? 5 : 3,
+          'line-blur': isHighway ? 2 : 0,
+          'line-opacity': 1
+        }
+      },
+      {
+        id: 'road-labels',
+        type: 'symbol',
+        source: 'protomaps',
+        'source-layer': 'roads',
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-font': ['Inter Bold'],
+          'text-size': 12,
+          'symbol-placement': 'line',
+          'text-letter-spacing': 0.1
+        },
+        paint: {
+          'text-color': isDark ? '#ffffff' : '#000000',
+          'text-halo-color': bgColor,
+          'text-halo-width': 2,
+          'text-opacity': 0.8
+        }
       }
     ]
   };
 };
-export const MAP_THEMES: Record<string, { filter: string }> = {
-  light: { filter: 'none' },
-  dark: { filter: 'brightness(0.6) contrast(1.2) saturate(0.8)' },
-  vibrant: { filter: 'brightness(1.1) contrast(1.4) saturate(1.3)' },
-  highway: { filter: 'brightness(1.2) contrast(1.6) saturate(1.5)' }
-};
 export const getCategoryColor = (category: string) => {
   switch (category) {
-    case 'home': return '#60a5fa'; 
-    case 'work': return '#a78bfa'; 
-    case 'favorite': return '#fbbf24'; 
-    case 'recent': return '#34d399'; 
-    default: return '#9ca3af';
+    case 'home': return '#3b82f6';
+    case 'work': return '#8b5cf6';
+    case 'favorite': return '#f59e0b';
+    case 'recent': return '#10b981';
+    default: return '#64748b';
   }
 };
 export const formatETA = (durationSeconds: number): string => {
   const arrivalDate = new Date(Date.now() + durationSeconds * 1000);
-  return format(arrivalDate, 'hh:mm:ss a');
+  return format(arrivalDate, 'HH:mm');
 };

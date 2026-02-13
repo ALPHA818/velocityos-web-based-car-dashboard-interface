@@ -3,12 +3,14 @@ import { persist } from 'zustand/middleware';
 import { api } from '@/lib/api-client';
 import type { UserSettings, SavedLocation } from '@shared/types';
 import { fetchRoute, RouteData } from '@/lib/nav-utils';
+import { toast } from 'sonner';
 export type GpsStatus = 'prompt' | 'granted' | 'denied' | 'unsupported';
 interface OSState {
   settings: UserSettings;
   locations: SavedLocation[];
   recentLocations: SavedLocation[];
   isLoading: boolean;
+  isInitialized: boolean;
   error: string | null;
   gpsStatus: GpsStatus;
   isMapOpen: boolean;
@@ -51,6 +53,7 @@ export const useOSStore = create<OSState>()(
       locations: [],
       recentLocations: [],
       isLoading: false,
+      isInitialized: false,
       error: null,
       gpsStatus: 'prompt',
       isMapOpen: false,
@@ -62,10 +65,11 @@ export const useOSStore = create<OSState>()(
       trackingId: null,
       isSharingLive: false,
       fetchSettings: async () => {
+        if (get().isInitialized) return;
         set({ isLoading: true });
         try {
           const data = await api<UserSettings>('/api/settings');
-          set({ settings: data, isLoading: false });
+          set({ settings: data, isLoading: false, isInitialized: true });
         } catch (err: any) {
           set({ error: err.message, isLoading: false });
         }
@@ -73,6 +77,10 @@ export const useOSStore = create<OSState>()(
       updateSettings: async (patch) => {
         const current = get().settings;
         const optimistic = { ...current, ...patch };
+        // Notify of theme switch if relevant
+        if (patch.theme && patch.theme !== current.theme) {
+          toast.info(`Switching to ${patch.theme} mode`, { position: 'bottom-center' });
+        }
         set({ settings: optimistic });
         try {
           const data = await api<UserSettings>('/api/settings', {
@@ -152,7 +160,8 @@ export const useOSStore = create<OSState>()(
         }
       },
       calculateRoute: async () => {
-        const { currentPos, activeDestination } = get();
+        const currentPos = get().currentPos;
+        const activeDestination = get().activeDestination;
         if (!currentPos || !activeDestination) return;
         const route = await fetchRoute(currentPos, [activeDestination.lat, activeDestination.lon]);
         set({ activeRoute: route });

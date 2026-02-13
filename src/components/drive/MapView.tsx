@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import Map, { Source, Layer, Marker, NavigationControl } from 'react-map-gl/maplibre';
+import Map, { Source, Layer, Marker } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useOSStore } from '@/store/use-os-store';
-import { MAP_THEMES, getCategoryColor, formatETA, getVectorStyle } from '@/lib/nav-utils';
+import { getCategoryColor, formatETA, getVectorStyle } from '@/lib/nav-utils';
 import { X, Navigation, Share2, Compass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TrackingOverlay } from './TrackingOverlay';
+import { motion } from 'framer-motion';
 export function MapView() {
   const isMapOpen = useOSStore((s) => s.isMapOpen);
   const closeMap = useOSStore((s) => s.closeMap);
@@ -17,6 +18,7 @@ export function MapView() {
   const isSharingLive = useOSStore((s) => s.isSharingLive);
   const mapTheme = useOSStore((s) => s.settings.mapTheme);
   const currentPos = useOSStore((s) => s.currentPos);
+  const locations = useOSStore((s) => s.locations);
   const mapRef = useRef<any>(null);
   const [showShare, setShowShare] = React.useState(false);
   // Sync Map View
@@ -30,10 +32,11 @@ export function MapView() {
     }
   }, [currentPos, isFollowing, isMapOpen]);
   const vectorStyle = useMemo(() => getVectorStyle(mapTheme), [mapTheme]);
-  const routeGeoJSON = useMemo(() => {
+  const routeGeoJSON = useMemo((): GeoJSON.Feature<GeoJSON.LineString> | null => {
     if (!activeRoute) return null;
     return {
       type: 'Feature',
+      properties: {},
       geometry: {
         type: 'LineString',
         coordinates: activeRoute.coordinates.map(c => [c[1], c[0]])
@@ -41,9 +44,10 @@ export function MapView() {
     };
   }, [activeRoute]);
   if (!isMapOpen) return null;
-  const themeClass = `map-${mapTheme}-filter`;
   return (
-    <div className={cn("fixed inset-0 z-[100] bg-black transition-opacity duration-500", themeClass)}>
+    <div className="fixed inset-0 z-[100] bg-black overflow-hidden">
+      {/* Decorative Overlay for readability */}
+      <div className="absolute inset-0 z-[101] pointer-events-none bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)]" />
       <Map
         ref={mapRef}
         initialViewState={{
@@ -57,18 +61,25 @@ export function MapView() {
       >
         {currentPos && (
           <Marker longitude={currentPos[1]} latitude={currentPos[0]}>
-            <div className="custom-user-icon w-10 h-10 bg-primary border-4 border-white rounded-full shadow-glow animate-pulse" />
+            <div className="relative flex items-center justify-center">
+              <motion.div 
+                animate={{ scale: [1, 2.5], opacity: [0.5, 0] }}
+                transition={{ repeat: Infinity, duration: 2, ease: "easeOut" }}
+                className="absolute w-12 h-12 bg-primary rounded-full"
+              />
+              <div className="custom-user-icon w-8 h-8 bg-primary border-4 border-white rounded-full shadow-glow z-10" />
+            </div>
           </Marker>
         )}
-        {useOSStore.getState().locations.map((loc) => (
+        {locations.map((loc) => (
           <Marker key={loc.id} longitude={loc.lon} latitude={loc.lat}>
-            <div 
-              className="custom-pin-icon w-8 h-8 rounded-full border-4 border-white shadow-glow" 
-              style={{ 
+            <div
+              className="custom-pin-icon w-8 h-8 rounded-full border-4 border-white shadow-glow transition-transform"
+              style={{
                 backgroundColor: getCategoryColor(loc.category),
                 opacity: activeDestination?.id === loc.id ? 1 : 0.6,
-                transform: activeDestination?.id === loc.id ? 'scale(1.2)' : 'scale(1)'
-              }} 
+                transform: activeDestination?.id === loc.id ? 'scale(1.3)' : 'scale(1)'
+              }}
             />
           </Marker>
         ))}
@@ -81,19 +92,20 @@ export function MapView() {
               paint={{
                 'line-color': '#3b82f6',
                 'line-width': 12,
-                'line-opacity': 0.8
+                'line-opacity': 0.8,
+                'line-blur': 2
               }}
             />
           </Source>
         )}
       </Map>
-      <div className="absolute top-8 left-32 right-8 z-[1000] flex justify-between items-start pointer-events-none">
+      <div className="absolute top-8 left-32 right-8 z-[110] flex justify-between items-start pointer-events-none">
         <div className="flex gap-4 pointer-events-auto">
           <Button
             variant="secondary"
             size="lg"
             onClick={closeMap}
-            className="h-24 w-24 rounded-[2rem] bg-zinc-900/95 backdrop-blur-3xl border-white/20 shadow-glow"
+            className="h-24 w-24 rounded-[2rem] bg-zinc-900/95 backdrop-blur-3xl border-white/20 shadow-glow active:scale-90 transition-transform"
           >
             <X className="w-12 h-12" />
           </Button>
@@ -116,18 +128,18 @@ export function MapView() {
             variant="secondary"
             size="lg"
             onClick={() => setShowShare(true)}
-            className={cn("h-24 w-24 rounded-[2rem] bg-zinc-900/95 backdrop-blur-3xl border-white/20 shadow-glow", isSharingLive && "text-primary")}
+            className={cn("h-24 w-24 rounded-[2rem] bg-zinc-900/95 backdrop-blur-3xl border-white/20 shadow-glow active:scale-90 transition-transform", isSharingLive && "text-primary")}
           >
             <Share2 className="w-12 h-12" />
           </Button>
         </div>
       </div>
-      <div className="absolute bottom-8 right-8 z-[1000] flex flex-col gap-4">
+      <div className="absolute bottom-8 right-8 z-[110] flex flex-col gap-4">
          <Button
           variant={isFollowing ? "default" : "secondary"}
           size="lg"
           className={cn(
-            "h-24 w-24 rounded-[2rem] backdrop-blur-3xl border-white/20 transition-all shadow-glow-lg",
+            "h-24 w-24 rounded-[2rem] backdrop-blur-3xl border-white/20 transition-all shadow-glow-lg active:scale-90",
             isFollowing ? "bg-primary" : "bg-zinc-900/95"
           )}
           onClick={() => setFollowing(true)}
@@ -136,8 +148,12 @@ export function MapView() {
         </Button>
       </div>
       {activeRoute && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[1000] w-[800px] pointer-events-none">
-          <div className="bg-primary/90 backdrop-blur-3xl border border-white/30 rounded-[3.5rem] p-10 flex items-center justify-between shadow-glow-lg pointer-events-auto">
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[110] w-[800px] pointer-events-none">
+          <motion.div 
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="bg-primary/90 backdrop-blur-3xl border border-white/30 rounded-[3.5rem] p-10 flex items-center justify-between shadow-glow-lg pointer-events-auto"
+          >
             <div className="flex flex-col">
               <span className="text-white/70 font-black uppercase text-sm tracking-[0.3em]">Arrival</span>
               <span className="text-6xl font-black tabular-nums text-white text-neon">{formatETA(activeRoute.duration).split(' ')[0]}</span>
@@ -152,7 +168,7 @@ export function MapView() {
               <span className="text-white/70 font-black uppercase text-sm tracking-[0.3em]">Distance</span>
               <span className="text-5xl font-black tabular-nums text-white">{(activeRoute.distance / 1000).toFixed(1)} <span className="text-2xl">km</span></span>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
       {showShare && <TrackingOverlay onClose={() => setShowShare(false)} />}
