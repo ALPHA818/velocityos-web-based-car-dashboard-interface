@@ -5,6 +5,8 @@ import { useOSStore } from '@/store/use-os-store';
 import { Play, Pause, SkipForward, SkipBack, Volume2, Map as MapIcon } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
+import { useIsLandscapeMobile } from '@/hooks/use-landscape-mobile';
 export function MediaPage() {
   const isPlaying = useMediaStore((s) => s.isPlaying);
   const currentTrackIndex = useMediaStore((s) => s.currentTrackIndex);
@@ -17,6 +19,7 @@ export function MediaPage() {
   const setProgress = useMediaStore((s) => s.setProgress);
   const setVolume = useMediaStore((s) => s.setVolume);
   const openMap = useOSStore((s) => s.openMap);
+  const isLandscapeMobile = useIsLandscapeMobile();
   const track = getTrack(currentTrackIndex);
   const formatTime = (seconds: number) => {
     if (!seconds || isNaN(seconds)) return "0:00";
@@ -26,8 +29,14 @@ export function MediaPage() {
   };
   return (
     <CarLayout>
-      <div className="h-full flex flex-col md:flex-row gap-16 items-center">
-        <div className="w-full md:w-1/2 aspect-square max-w-[550px] relative group">
+      <div className={cn(
+        "h-full flex md:flex-row items-center",
+        isLandscapeMobile ? "flex-row gap-2.5 items-stretch" : "flex-col gap-16"
+      )}>
+        <div className={cn(
+          "aspect-square relative group",
+          isLandscapeMobile ? "w-[34%] max-w-[176px] self-center" : "w-full md:w-1/2 max-w-[550px]"
+        )}>
           <AnimatePresence mode="wait">
             <motion.img
               key={track.id}
@@ -36,7 +45,10 @@ export function MediaPage() {
               exit={{ opacity: 0, scale: 1.1, rotate: 5 }}
               src={track.cover}
               alt={track.title}
-              className="w-full h-full object-cover rounded-[4rem] shadow-2xl border border-white/10"
+              className={cn(
+                "w-full h-full object-cover shadow-2xl border border-white/10",
+                isLandscapeMobile ? "rounded-2xl" : "rounded-[4rem]"
+              )}
             />
           </AnimatePresence>
           {isPlaying && (
@@ -47,14 +59,17 @@ export function MediaPage() {
             />
           )}
         </div>
-        <div className="flex-1 w-full space-y-12">
+        <div className={cn("flex-1 w-full", isLandscapeMobile ? "space-y-2.5" : "space-y-12")}>
           <div className="flex justify-between items-start">
-            <div className="space-y-3">
+            <div className={cn(isLandscapeMobile ? "space-y-1" : "space-y-3")}>
               <motion.h1
                 key={track.title}
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                className="text-7xl font-black tracking-tighter"
+                className={cn(
+                  "font-black tracking-tighter",
+                  isLandscapeMobile ? "text-2xl" : "text-7xl"
+                )}
               >
                 {track.title}
               </motion.h1>
@@ -63,56 +78,65 @@ export function MediaPage() {
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.1 }}
-                className="text-4xl text-muted-foreground font-semibold"
+                className={cn(
+                  "text-muted-foreground font-semibold",
+                  isLandscapeMobile ? "text-sm" : "text-4xl"
+                )}
               >
                 {track.artist}
               </motion.p>
             </div>
             <button
               onClick={() => openMap()}
-              className="touch-target p-6 rounded-3xl bg-white/5 text-muted-foreground hover:text-primary hover:bg-white/10 transition-all"
+              className={cn(
+                "touch-target bg-white/5 text-muted-foreground hover:text-primary hover:bg-white/10 transition-all",
+                isLandscapeMobile ? "p-1.5 rounded-lg" : "p-6 rounded-3xl"
+              )}
             >
-              <MapIcon className="w-12 h-12" />
+              <MapIcon className={cn(isLandscapeMobile ? "w-4 h-4" : "w-12 h-12")} />
             </button>
           </div>
-          <div className="space-y-8">
+          <div className={cn(isLandscapeMobile ? "space-y-3" : "space-y-8")}>
             <Slider
               value={[progress]}
               max={100}
               step={0.1}
-              className="h-6"
+              className={cn(isLandscapeMobile ? "h-2" : "h-6")}
               onValueChange={(vals) => setProgress(vals[0])}
             />
-            <div className="flex justify-between text-2xl font-mono text-muted-foreground/60">
+            <div className={cn("flex justify-between font-mono text-muted-foreground/60", isLandscapeMobile ? "text-xs" : "text-2xl")}>
               <span>{formatTime((progress / 100) * duration)}</span>
               <span>{formatTime(duration)}</span>
             </div>
           </div>
-          <div className="flex items-center justify-center gap-16">
+          <div className={cn("flex items-center justify-center", isLandscapeMobile ? "gap-4" : "gap-16")}>
             <button onClick={prevTrack} className="touch-target text-muted-foreground hover:text-foreground active:scale-90 transition-all">
-              <SkipBack className="w-20 h-20 fill-current" />
+              <SkipBack className={cn("fill-current", isLandscapeMobile ? "w-6 h-6" : "w-20 h-20")} />
             </button>
             <button
               onClick={togglePlay}
-              className="w-40 h-40 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-glow-lg hover:scale-105 active:scale-95 transition-all"
+              className={cn(
+                "rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-glow-lg hover:scale-105 active:scale-95 transition-all",
+                isLandscapeMobile ? "w-14 h-14" : "w-40 h-40"
+              )}
             >
               {isPlaying ? (
-                <Pause className="w-20 h-20 fill-current" />
+                <Pause className={cn("fill-current", isLandscapeMobile ? "w-7 h-7" : "w-20 h-20")} />
               ) : (
-                <Play className="w-20 h-20 fill-current ml-3" />
+                <Play className={cn("fill-current", isLandscapeMobile ? "w-7 h-7 ml-1" : "w-20 h-20 ml-3")} />
               )}
             </button>
             <button onClick={nextTrack} className="touch-target text-muted-foreground hover:text-foreground active:scale-90 transition-all">
-              <SkipForward className="w-20 h-20 fill-current" />
+              <SkipForward className={cn("fill-current", isLandscapeMobile ? "w-6 h-6" : "w-20 h-20")} />
             </button>
           </div>
-          <div className="flex items-center gap-10 px-8">
-            <Volume2 className="w-10 h-10 text-muted-foreground" />
+          <div className={cn("flex items-center", isLandscapeMobile ? "gap-3 px-0.5" : "gap-10 px-8")}>
+            <Volume2 className={cn("text-muted-foreground", isLandscapeMobile ? "w-4 h-4" : "w-10 h-10")} />
             <Slider
               value={[volume * 100]}
               max={100}
               onValueChange={(vals) => setVolume(vals[0] / 100)}
-              className="flex-1 h-4"
+              className={cn("flex-1", isLandscapeMobile ? "h-1.5" : "h-4")}
             />
           </div>
         </div>

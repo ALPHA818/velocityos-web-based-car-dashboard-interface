@@ -17,6 +17,8 @@ import { SettingsPage } from '@/pages/SettingsPage'
 import { MediaPage } from '@/pages/MediaPage'
 import { AppsPage } from '@/pages/AppsPage'
 import { TrackingPage } from '@/pages/TrackingPage'
+import TripsPage from './pages/TripsPage'
+import { ThemeStorePage } from '@/pages/ThemeStorePage'
 const queryClient = new QueryClient();
 // Register Service Worker
 if ('serviceWorker' in navigator) {
@@ -55,6 +57,16 @@ const router = createBrowserRouter([
   {
     path: "/track/:id",
     element: <TrackingPage />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/trips",
+    element: <TripsPage />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/theme-store",
+    element: <ThemeStorePage />,
     errorElement: <RouteErrorBoundary />,
   },
 ]);

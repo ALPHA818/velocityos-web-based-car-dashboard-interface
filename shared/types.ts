@@ -15,6 +15,17 @@ export interface UserSettings {
   theme: 'dark' | 'light';
   autoTheme: boolean;
   mapPerspective: 'driving' | 'top-down';
+  aiName: string;
+  aiVoiceControlEnabled: boolean;
+  ollamaBaseUrl: string;
+  ollamaModel: string;
+  aiVoiceEnabled: boolean;
+  aiVoiceAutoSpeak: boolean;
+  aiVoiceName: string;
+  aiVoiceLang: string;
+  aiVoiceRate: number;
+  aiVoicePitch: number;
+  aiVoiceVolume: number;
 }
 export type LocationCategory = 'home' | 'work' | 'favorite' | 'recent';
 export interface SavedLocation {

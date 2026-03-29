@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port ${PORT:-3000}",
     "build": "vite build",
+    "monitor:test-threshold-cooldown": "node scripts/monitor-threshold-runtime-test.mjs",
+    "voice:test-microphone-runtime": "node scripts/voice-microphone-runtime-simulation.mjs",
     "lint": "eslint --cache -f json --quiet .",
     "preview": "bun run build && vite preview --host 0.0.0.0 --port ${PORT:-4173}",
     "deploy": "bun run build && wrangler deploy",
@@ -13,6 +15,8 @@
     "prepare": "bun .bootstrap.js || true"
   },
   "dependencies": {
+    "@capacitor/android": "^8.2.0",
+    "@capacitor/core": "^8.2.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@headlessui/react": "^2.2.4",
@@ -48,6 +52,7 @@
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.38.0",
     "class-variance-authority": "^0.7.1",
+    "cloudflare": "^5.0.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
@@ -79,10 +84,10 @@
     "uuid": "^11.1.0",
     "vaul": "^1.1.2",
     "zod": "^4.0.5",
-    "zustand": "^5.0.6",
-    "cloudflare": "^5.0.0"
+    "zustand": "^5.0.6"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.2.0",
     "@cloudflare/vite-plugin": "^1.17.1",
     "@cloudflare/workers-types": "^4.20250424.0",
     "@eslint/js": "^9.22.0",

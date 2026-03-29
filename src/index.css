@@ -69,10 +69,10 @@
 }
 @layer components {
   .dashboard-card {
-    @apply bg-zinc-900/60 backdrop-blur-2xl border border-white/5 rounded-[2.5rem] p-8 transition-all active:scale-[0.99];
+    @apply bg-zinc-900/60 backdrop-blur-2xl border border-white/5 rounded-[1.5rem] sm:rounded-[2rem] md:rounded-[2.5rem] p-4 sm:p-6 md:p-8 transition-all active:scale-[0.99];
   }
   .touch-target {
-    @apply min-h-[64px] min-w-[64px] flex items-center justify-center cursor-pointer;
+    @apply min-h-[48px] min-w-[48px] sm:min-h-[60px] sm:min-w-[60px] md:min-h-[64px] md:min-w-[64px] flex items-center justify-center cursor-pointer;
   }
   .shadow-glow {
     box-shadow: 0 0 30px -5px rgba(59, 130, 246, 0.6);
@@ -86,4 +86,11 @@
 }
 .max-w-7xl-car {
   @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+}
+
+@media (max-height: 767px) and (orientation: landscape) {
+  .touch-target {
+    min-height: 40px;
+    min-width: 40px;
+  }
 }

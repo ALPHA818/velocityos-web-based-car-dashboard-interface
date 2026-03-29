@@ -11,6 +11,7 @@ import { TrackingOverlay } from './TrackingOverlay';
 import { SearchOverlay } from './SearchOverlay';
 import { PlaceDetails } from './PlaceDetails';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useIsLandscapeMobile } from '@/hooks/use-landscape-mobile';
 export function MapView() {
   const isMapOpen = useOSStore(s => s.isMapOpen);
   const closeMap = useOSStore(s => s.closeMap);
@@ -29,6 +30,16 @@ export function MapView() {
   const discoveredPlace = useOSStore(s => s.selectedDiscoveredPlace);
   const mapRef = useRef<any>(null);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLandscapeMobile = useIsLandscapeMobile();
+  const topActionButtonClass = isLandscapeMobile
+    ? "h-10 w-10 rounded-xl"
+    : "h-12 w-12 sm:h-14 sm:w-14 md:h-24 md:w-24 rounded-2xl md:rounded-[2rem]";
+  const perspectiveButtonClass = isLandscapeMobile
+    ? "h-10 w-10 rounded-xl"
+    : "h-12 w-12 sm:h-14 sm:w-14 md:h-24 md:w-24 rounded-2xl md:rounded-[2.5rem]";
+  const actionIconClass = isLandscapeMobile
+    ? "w-4 h-4"
+    : "w-5 h-5 sm:w-6 sm:h-6 md:w-12 md:h-12";
   const [showShare, setShowShare] = React.useState(false);
   useEffect(() => {
     if (isMapOpen && currentPos && isFollowing && mapRef.current) {
@@ -43,13 +54,13 @@ export function MapView() {
       };
       if (isDriving) {
         // Offset the center slightly so the car is at the bottom 1/3 of the screen for better foresight
-        easeOptions.padding = { top: 350, bottom: 0, left: 0, right: 0 };
+        easeOptions.padding = { top: isLandscapeMobile ? 160 : 350, bottom: 0, left: 0, right: 0 };
       } else {
         easeOptions.padding = { top: 0, bottom: 0, left: 0, right: 0 };
       }
       mapRef.current?.easeTo(easeOptions);
     }
-  }, [currentPos, currentHeading, isFollowing, isMapOpen, mapPerspective]);
+  }, [currentPos, currentHeading, isFollowing, isMapOpen, mapPerspective, isLandscapeMobile]);
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (map) map.getCanvas().style.filter = getMapFilter(mapTheme);
@@ -131,10 +142,13 @@ export function MapView() {
           </Source>
         )}
       </Map>
-      <div className="absolute top-8 left-32 right-8 z-[110] flex justify-between items-start">
+      <div className={cn(
+        "absolute z-[110] flex justify-between items-start",
+        isLandscapeMobile ? "top-2 left-2 right-2" : "top-8 left-32 right-8"
+      )}>
         <div className="flex gap-4">
-          <Button variant="secondary" size="lg" onClick={closeMap} className="h-24 w-24 rounded-[2rem] bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-90 transition-transform">
-            <X className="w-12 h-12" />
+          <Button variant="secondary" size="lg" onClick={closeMap} className={cn(topActionButtonClass, "bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-90 transition-transform")}>
+            <X className={actionIconClass} />
           </Button>
           <AnimatePresence>
             {(activeDestination || discoveredPlace) && (
@@ -142,73 +156,84 @@ export function MapView() {
                 initial={{ opacity: 0, x: -20 }} 
                 animate={{ opacity: 1, x: 0 }} 
                 exit={{ opacity: 0, x: -20 }} 
-                className="bg-primary/95 backdrop-blur-3xl p-6 rounded-[2.5rem] flex flex-col justify-center min-w-[350px] border border-white/20 shadow-glow-lg"
+                className="bg-primary/95 backdrop-blur-3xl p-3 sm:p-4 md:p-6 rounded-2xl md:rounded-[2.5rem] flex flex-col justify-center min-w-[170px] sm:min-w-[230px] md:min-w-[350px] border border-white/20 shadow-glow-lg"
               >
-                <span className="text-xs uppercase font-black text-white/70 tracking-widest flex items-center gap-2">
-                  <Navigation className="w-4 h-4 fill-current" /> Navigating To
+                <span className="text-[10px] md:text-xs uppercase font-black text-white/70 tracking-widest flex items-center gap-1.5 md:gap-2">
+                  <Navigation className="w-3.5 h-3.5 md:w-4 md:h-4 fill-current" /> Navigating To
                 </span>
-                <span className="text-4xl font-black text-white truncate max-w-[400px] text-neon">
+                <span className="text-xl sm:text-2xl md:text-4xl font-black text-white truncate max-w-[180px] sm:max-w-[250px] md:max-w-[400px] text-neon">
                   {(activeDestination || discoveredPlace)?.label}
                 </span>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
           <Button
             variant="secondary"
             size="lg"
             onClick={() => setSearchOverlay(true)}
-            className="h-24 w-24 rounded-[2rem] bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-95 transition-transform"
+            className={cn(topActionButtonClass, "bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-95 transition-transform")}
           >
-            <Search className="w-12 h-12" />
+            <Search className={actionIconClass} />
           </Button>
           <Button
             variant="secondary"
             size="lg"
             onClick={() => setShowShare(true)}
             className={cn(
-              "h-24 w-24 rounded-[2rem] bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-95 transition-transform", 
+              topActionButtonClass,
+              "bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-95 transition-transform", 
               isSharingLive && "text-primary border-primary/50"
             )}
           >
-            <Share2 className="w-12 h-12" />
+            <Share2 className={actionIconClass} />
           </Button>
         </div>
       </div>
-      <div className="absolute bottom-10 right-10 z-[110] flex flex-col gap-6">
+      <div className={cn(
+        "absolute z-[110] flex flex-col",
+        isLandscapeMobile ? "bottom-2 right-2 gap-2" : "bottom-10 right-10 gap-6"
+      )}>
         <Button 
           variant={mapPerspective === 'top-down' ? "default" : "secondary"} 
           size="lg" 
           className={cn(
-            "h-24 w-24 rounded-[2.5rem] backdrop-blur-3xl border border-white/10 shadow-glow-lg transition-all", 
-            mapPerspective === 'top-down' ? "bg-primary text-white scale-110" : "bg-zinc-950/90 text-muted-foreground"
+            perspectiveButtonClass,
+            "backdrop-blur-3xl border border-white/10 shadow-glow-lg transition-all", 
+            mapPerspective === 'top-down'
+              ? cn("bg-primary text-white", isLandscapeMobile ? "scale-100" : "scale-110")
+              : "bg-zinc-950/90 text-muted-foreground"
           )} 
           onClick={() => toggleMapPerspective()}
         >
-          <Globe className="w-12 h-12" />
+          <Globe className={actionIconClass} />
         </Button>
         <Button 
           variant={mapPerspective === 'driving' ? "default" : "secondary"} 
           size="lg" 
           className={cn(
-            "h-24 w-24 rounded-[2.5rem] backdrop-blur-3xl border border-white/10 shadow-glow-lg transition-all", 
-            mapPerspective === 'driving' ? "bg-primary text-white scale-110" : "bg-zinc-950/90 text-muted-foreground"
+            perspectiveButtonClass,
+            "backdrop-blur-3xl border border-white/10 shadow-glow-lg transition-all", 
+            mapPerspective === 'driving'
+              ? cn("bg-primary text-white", isLandscapeMobile ? "scale-100" : "scale-110")
+              : "bg-zinc-950/90 text-muted-foreground"
           )} 
           onClick={() => toggleMapPerspective()}
         >
-          <Navigation className="w-12 h-12" />
+          <Navigation className={actionIconClass} />
         </Button>
         <Button 
           variant={isFollowing ? "default" : "secondary"} 
           size="lg" 
           className={cn(
-            "h-24 w-24 rounded-[2.5rem] backdrop-blur-3xl border border-white/10 shadow-glow-lg transition-all", 
+            perspectiveButtonClass,
+            "backdrop-blur-3xl border border-white/10 shadow-glow-lg transition-all", 
             isFollowing ? "bg-primary" : "bg-zinc-950/90"
           )} 
           onClick={() => setFollowing(true)}
         >
-          <Compass className={cn("w-12 h-12", isFollowing && "animate-pulse")} />
+          <Compass className={cn(actionIconClass, isFollowing && "animate-pulse")} />
         </Button>
       </div>
       <PlaceDetails />

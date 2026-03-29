@@ -1,93 +1,101 @@
 import React, { useEffect } from 'react';
 import { CarLayout } from '@/components/layout/CarLayout';
 import { Speedometer } from '@/components/drive/Speedometer';
-import { DigitalClock } from '@/components/drive/DigitalClock';
 import { WeatherWidget } from '@/components/drive/WeatherWidget';
 import { MiniPlayer } from '@/components/drive/MiniPlayer';
+import { DistanceBubble } from '@/components/drive/DistanceBubble';
 import { Toaster } from '@/components/ui/sonner';
 import { motion } from 'framer-motion';
 import { useOSStore } from '@/store/use-os-store';
-import { ArrowRight, MapPinOff } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
+import { useIsLandscapeMobile } from '@/hooks/use-landscape-mobile';
 export function HomePage() {
+  const navigate = useNavigate();
   const fetchSettings = useOSStore((s) => s.fetchSettings);
   const fetchLocations = useOSStore((s) => s.fetchLocations);
-  const locations = useOSStore((s) => s.locations);
-  const openMap = useOSStore((s) => s.openMap);
-  const gpsStatus = useOSStore((s) => s.gpsStatus);
+  const hasLocations = useOSStore((s) => s.locations.length > 0);
+  const isLandscapeMobile = useIsLandscapeMobile();
+
   useEffect(() => {
     fetchSettings();
-    fetchLocations();
-  }, [fetchSettings, fetchLocations]);
-  const homeLocation = locations.find(l => l.category === 'home');
-  const handleGoHome = () => {
-    if (homeLocation) {
-      openMap(homeLocation);
+    if (!hasLocations) {
+      fetchLocations();
     }
-  };
+  }, [fetchSettings, fetchLocations, hasLocations]);
+
   return (
     <CarLayout>
-      <div className="h-full grid grid-cols-12 grid-rows-6 gap-6">
+      <div className={cn(
+        "h-auto md:h-full grid md:grid-cols-12 md:grid-rows-6",
+        isLandscapeMobile
+          ? "grid-cols-2 auto-rows-[minmax(96px,auto)] gap-1.5"
+          : "grid-cols-1 auto-rows-[minmax(140px,auto)] gap-3 sm:gap-4 md:gap-6"
+      )}>
+        {/* Speedometer */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          className="col-span-8 row-span-4 dashboard-card flex items-center justify-center relative overflow-hidden"
-        >
-          {gpsStatus === 'denied' && (
-            <div className="absolute top-6 left-6 z-10 px-4 py-2 bg-destructive/20 border border-destructive/30 rounded-full flex items-center gap-2">
-              <MapPinOff className="w-4 h-4 text-destructive" />
-              <span className="text-xs font-black text-destructive uppercase tracking-widest">No GPS Signal</span>
-            </div>
+          className={cn(
+            "col-span-1 md:col-span-6 md:row-span-2 min-h-[120px] sm:min-h-[140px] md:min-h-0 dashboard-card flex items-center justify-center relative overflow-hidden",
+            isLandscapeMobile && "col-span-1 row-span-1 min-h-[72px]"
           )}
-          <div className="absolute top-0 left-0 p-4 opacity-5 pointer-events-none">
-            <span className="text-9xl font-black">DRIVE</span>
-          </div>
+        >
           <Speedometer />
         </motion.div>
+        {/* Media (smaller, filled out) */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="col-span-4 row-span-3 dashboard-card"
-        >
-          <DigitalClock />
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="col-span-4 row-span-3"
+          transition={{ duration: 0.12 }}
+          className={cn(
+            "col-span-1 md:col-span-6 md:row-span-2 min-h-[120px] sm:min-h-[140px] md:min-h-0 dashboard-card",
+            isLandscapeMobile && "row-span-1 min-h-[72px]"
+          )}
         >
           <MiniPlayer />
         </motion.div>
+        {/* Total KM Driven (DistanceBubble) */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.3 }}
-          className="col-span-4 row-span-2 dashboard-card"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.12 }}
+          className={cn(
+            "col-span-1 md:col-span-6 md:row-span-2 min-h-[120px] sm:min-h-[140px] md:min-h-0 dashboard-card cursor-pointer",
+            isLandscapeMobile && "row-span-1 min-h-[72px]"
+          )}
+          onClick={() => navigate('/trips')}
+        >
+          <DistanceBubble />
+        </motion.div>
+        {/* Navigation Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.12 }}
+          className={cn(
+            "col-span-1 md:col-span-6 md:row-span-2 min-h-[120px] sm:min-h-[140px] md:min-h-0 dashboard-card cursor-pointer",
+            isLandscapeMobile && "row-span-1 min-h-[72px]"
+          )}
+          onClick={() => navigate('/navigation')}
+        >
+          <div className="flex flex-col items-center justify-center h-full w-full">
+            <span className="text-lg font-bold text-primary mb-1">Navigation</span>
+            <span className="text-xs text-muted-foreground">Open navigation tab</span>
+          </div>
+        </motion.div>
+        {/* Temperature/Weather */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.12 }}
+          className={cn(
+            "col-span-1 md:col-span-6 md:row-span-2 min-h-[120px] sm:min-h-[140px] md:min-h-0 dashboard-card",
+            isLandscapeMobile && "row-span-1 min-h-[72px]"
+          )}
         >
           <WeatherWidget />
         </motion.div>
-        <motion.button
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.4 }}
-          disabled={!homeLocation}
-          onClick={handleGoHome}
-          className="col-span-4 row-span-2 dashboard-card flex flex-col justify-center p-8 overflow-hidden relative group text-left disabled:opacity-50"
-        >
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <ArrowRight className="w-20 h-20 -rotate-45" />
-          </div>
-          <h3 className="text-xl font-bold text-muted-foreground uppercase tracking-wider">Ready to go?</h3>
-          <p className="text-4xl font-black mt-1 text-primary">
-            {homeLocation ? `Head ${homeLocation.label}` : 'Set Home'}
-          </p>
-          <div className="mt-4 flex gap-2">
-            <div className="h-3 w-16 bg-primary rounded-full shadow-glow" />
-            <div className="h-3 w-4 bg-zinc-700 rounded-full" />
-            <div className="h-3 w-4 bg-zinc-700 rounded-full" />
-          </div>
-        </motion.button>
       </div>
       <Toaster theme="dark" richColors position="top-center" />
     </CarLayout>

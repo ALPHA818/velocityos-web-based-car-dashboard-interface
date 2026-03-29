@@ -4,10 +4,12 @@ import { Navigation } from 'lucide-react';
 import { useOSStore } from '@/store/use-os-store';
 import { cn } from '@/lib/utils';
 import { motion, useSpring, useMotionValue, useTransform } from 'framer-motion';
+import { useIsLandscapeMobile } from '@/hooks/use-landscape-mobile';
 export function Speedometer() {
   const currentPos = useOSStore((s) => s.currentPos);
   const currentSpeed = useOSStore((s) => s.currentSpeed);
   const units = useOSStore((s) => s.settings.units);
+  const isLandscapeMobile = useIsLandscapeMobile();
   const speedValue = useMotionValue(0);
   const smoothSpeed = useSpring(speedValue, {
     damping: 25, // Reduced damping for faster response
@@ -35,32 +37,44 @@ export function Speedometer() {
     prevRef.current = { pos: currentPos, ts: now };
   }, [currentPos, currentSpeed, units, speedValue]);
   return (
-    <div className="flex flex-col items-center justify-center h-full relative overflow-hidden">
-      <div className="absolute top-0 right-0 p-4 opacity-10">
-        <Navigation className="w-20 h-20" />
+    <div className={cn("flex flex-col items-center justify-center h-full relative overflow-hidden", isLandscapeMobile && "gap-0.5")}>
+      <div className={cn("absolute top-0 right-0 opacity-10", isLandscapeMobile ? "hidden" : "p-3 md:p-4")}>
+        <Navigation className={cn(isLandscapeMobile ? "w-8 h-8" : "w-12 h-12 md:w-20 md:h-20")} />
       </div>
-      <div className="flex items-baseline gap-4 relative">
+      <div className={cn("flex items-baseline gap-2 sm:gap-3 md:gap-4 relative", isLandscapeMobile && "gap-1.5") }>
         <motion.span
-          className="text-[12rem] font-black tracking-tight tabular-nums text-primary transition-all duration-300 leading-none select-none text-neon"
+          className={cn(
+            "font-black tracking-tight tabular-nums text-primary transition-all duration-300 leading-none select-none text-neon",
+            isLandscapeMobile
+              ? "text-[2.4rem] sm:text-[2.8rem]"
+              : "text-[5.25rem] sm:text-[7rem] md:text-[9rem] lg:text-[12rem]"
+          )}
           style={{
-            textShadow: "0 0 60px rgba(59,130,246,0.45)"
+            textShadow: isLandscapeMobile ? "0 0 30px rgba(59,130,246,0.38)" : "0 0 60px rgba(59,130,246,0.45)"
           }}
         >
           {displaySpeed}
         </motion.span>
-        <span className="text-4xl font-black text-muted-foreground uppercase tracking-[0.3em] tabular-nums ml-2">
+        <span className={cn(
+          "font-black text-muted-foreground uppercase tabular-nums",
+          isLandscapeMobile
+            ? "text-xs tracking-[0.14em] ml-0.5"
+            : "text-lg sm:text-2xl md:text-4xl tracking-[0.22em] md:tracking-[0.3em] ml-1 md:ml-2"
+        )}>
           {units}
         </span>
       </div>
-      <div className="mt-8 flex gap-4">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
-          <Bar key={i} index={i} smoothSpeed={smoothSpeed} />
-        ))}
-      </div>
+      {!isLandscapeMobile && (
+        <div className="mt-4 sm:mt-6 md:mt-8 flex gap-2 sm:gap-3 md:gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Bar key={i} index={i} smoothSpeed={smoothSpeed} compact={false} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
-function Bar({ index, smoothSpeed }: { index: number; smoothSpeed: any }) {
+function Bar({ index, smoothSpeed, compact }: { index: number; smoothSpeed: any; compact: boolean }) {
   const threshold = index * 10; // Dynamic scaling based on 6 bars up to 60+ units
   const opacity = useTransform(smoothSpeed, [threshold - 10, threshold], [0.15, 1]);
   const scaleY = useTransform(smoothSpeed, [threshold - 10, threshold], [1, 1.45]);
@@ -77,7 +91,10 @@ function Bar({ index, smoothSpeed }: { index: number; smoothSpeed: any }) {
         backgroundColor: bgColor,
         boxShadow: useTransform(smoothSpeed, [threshold - 5, threshold], ["none", "0 0 15px rgba(59,130,246,0.5)"])
       }}
-      className="h-4 w-18 rounded-full transition-shadow duration-300"
+      className={cn(
+        "rounded-full transition-shadow duration-300",
+        compact ? "h-2.5 w-6 sm:w-7" : "h-3 sm:h-4 w-8 sm:w-12 md:w-14 lg:w-[4.5rem]"
+      )}
     />
   );
 }

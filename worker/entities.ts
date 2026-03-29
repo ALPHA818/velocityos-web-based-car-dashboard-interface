@@ -18,6 +18,17 @@ export class SettingsEntity extends IndexedEntity<UserSettings> {
     theme: "dark",
     autoTheme: true,
     mapPerspective: "top-down",
+    aiName: "nova",
+    aiVoiceControlEnabled: true,
+    ollamaBaseUrl: "http://127.0.0.1:11434",
+    ollamaModel: "llama3.2",
+    aiVoiceEnabled: true,
+    aiVoiceAutoSpeak: true,
+    aiVoiceName: "",
+    aiVoiceLang: "en-US",
+    aiVoiceRate: 1,
+    aiVoicePitch: 1,
+    aiVoiceVolume: 1,
   };
 }
 export class LocationEntity extends IndexedEntity<SavedLocation> {

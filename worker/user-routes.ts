@@ -3,18 +3,27 @@ import type { Env } from './core-utils';
 import { UserEntity, SettingsEntity, LocationEntity, TrackingEntity, RecentHistoryEntity, SearchHistoryEntity } from "./entities";
 import { ok, bad, notFound } from './core-utils';
 import type { UserSettings, SavedLocation } from "@shared/types";
+
+function normalizeSettings(settings: Partial<UserSettings> | null | undefined): UserSettings {
+  return {
+    ...SettingsEntity.initialState,
+    ...(settings ?? {}),
+    id: 'default',
+  };
+}
+
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
   // SETTINGS
   app.get('/api/settings', async (c) => {
     const entity = new SettingsEntity(c.env, 'default');
-    const settings = await entity.getState();
+    const settings = normalizeSettings(await entity.getState());
     return ok(c, settings);
   });
   app.post('/api/settings', async (c) => {
     const data = await c.req.json<Partial<UserSettings>>();
     const entity = new SettingsEntity(c.env, 'default');
-    const current = await entity.getState();
-    const updated = { ...current, ...data, id: 'default' };
+    const current = normalizeSettings(await entity.getState());
+    const updated = normalizeSettings({ ...current, ...data });
     await entity.save(updated);
     return ok(c, updated);
   });

@@ -48,15 +48,15 @@ export function WeatherWidget() {
     }
   }, [currentPos, gpsStatus, weather]);
   const getWeatherIcon = (code: number) => {
-    if (code === 0) return <Sun className="w-12 h-12 text-yellow-500" />;
-    if (code < 4) return <Cloud className="w-12 h-12 text-zinc-400" />;
-    if (code < 70) return <CloudRain className="w-12 h-12 text-blue-400" />;
-    return <CloudLightning className="w-12 h-12 text-purple-400" />;
+    if (code === 0) return <Sun className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 text-yellow-500" />;
+    if (code < 4) return <Cloud className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 text-zinc-400" />;
+    if (code < 70) return <CloudRain className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 text-blue-400" />;
+    return <CloudLightning className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 text-purple-400" />;
   };
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-2 opacity-70">
-        <AlertTriangle className="w-10 h-10 text-destructive" />
+        <AlertTriangle className="w-8 h-8 md:w-10 md:h-10 text-destructive" />
         <span className="text-xs uppercase font-black tracking-widest text-destructive">Weather Unavailable</span>
       </div>
     );
@@ -64,20 +64,20 @@ export function WeatherWidget() {
   if (gpsStatus === 'denied' && !weather) {
      return (
        <div className="flex flex-col items-center justify-center h-full gap-2 opacity-50">
-         <MapPinOff className="w-12 h-12 text-muted-foreground" />
+         <MapPinOff className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 text-muted-foreground" />
          <span className="text-xs uppercase font-black tracking-widest">No Location</span>
        </div>
      );
   }
-  if (!weather) return <div className="animate-pulse bg-zinc-800/50 w-full h-full rounded-3xl" />;
+  if (!weather) return <div className="animate-pulse bg-zinc-800/50 w-full h-full rounded-2xl md:rounded-3xl" />;
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-4">
-      <div className="p-4 bg-white/5 rounded-full">
+    <div className="flex flex-col items-center justify-center h-full gap-3 md:gap-4">
+      <div className="p-3 md:p-4 bg-white/5 rounded-full">
         {getWeatherIcon(weather.code)}
       </div>
       <div className="flex items-center gap-1">
-        <Thermometer className="w-6 h-6 text-muted-foreground" />
-        <span className="text-5xl font-bold tabular-nums">
+        <Thermometer className="w-5 h-5 md:w-6 md:h-6 text-muted-foreground" />
+        <span className="text-3xl sm:text-4xl md:text-5xl font-bold tabular-nums leading-none">
           {weather.temp}°
         </span>
       </div>
