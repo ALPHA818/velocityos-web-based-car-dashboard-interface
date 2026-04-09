@@ -1,20 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useOSStore } from '@/store/use-os-store';
-import { Search, X, MapPin, Loader2, Navigation, Compass, Clock, Trash2 } from 'lucide-react';
+import { Search, X, MapPin, Loader2, Navigation, Compass, Clock, Trash2, Star } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useNavigationSearchState } from '@/store/os-domain-hooks';
+import { toast } from 'sonner';
 export function SearchOverlay() {
-  const isOpen = useOSStore(s => s.isSearchOverlayOpen);
-  const setSearchOverlay = useOSStore(s => s.setSearchOverlay);
-  const isSearching = useOSStore(s => s.isSearching);
-  const searchResults = useOSStore(s => s.searchResults);
-  const searchHistory = useOSStore(s => s.searchHistory);
-  const performSearch = useOSStore(s => s.performSearch);
-  const selectDiscoveredPlace = useOSStore(s => s.selectDiscoveredPlace);
-  const fetchSearchHistory = useOSStore(s => s.fetchSearchHistory);
-  const clearSearchHistory = useOSStore(s => s.clearSearchHistory);
+  const { isSearchOverlayOpen: isOpen, setSearchOverlay, isSearching, searchResults, searchHistory, performSearch, selectDiscoveredPlace, fetchSearchHistory, clearSearchHistory, saveLocationBookmark } = useNavigationSearchState();
   const [query, setQuery] = useState('');
   useEffect(() => {
     if (isOpen) {
@@ -27,6 +20,21 @@ export function SearchOverlay() {
     }, 400);
     return () => clearTimeout(timer);
   }, [query, performSearch]);
+
+  const handleQuickSave = async (result: typeof searchResults[number]) => {
+    try {
+      const saved = await saveLocationBookmark({
+        label: result.label,
+        address: result.address,
+        lat: result.lat,
+        lon: result.lon,
+      }, 'favorite');
+      toast.success(`${saved.label} saved`);
+    } catch {
+      toast.error('Failed to save bookmark');
+    }
+  };
+
   if (!isOpen) return null;
   const showHistory = query.length < 3 && searchHistory.length > 0;
   return (
@@ -67,25 +75,39 @@ export function SearchOverlay() {
               </motion.div>
             ) : query.length >= 3 && searchResults.length > 0 ? (
               searchResults.map((res, idx) => (
-                <motion.button
+                <motion.div
                   key={res.id}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: idx * 0.03 }}
-                  onClick={() => selectDiscoveredPlace(res)}
-                  className="w-full p-8 rounded-[2.5rem] bg-white/5 border border-white/5 hover:bg-white/10 hover:border-primary/50 flex items-center gap-8 text-left transition-all active:scale-[0.98]"
+                  className="w-full rounded-[2.5rem] bg-white/5 border border-white/5 hover:border-primary/50 flex items-center gap-4 p-4 text-left transition-all md:gap-8 md:p-8"
                 >
-                  <div className="p-6 bg-primary/10 rounded-3xl text-primary">
-                    <MapPin className="w-10 h-10" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-3xl font-black truncate">{res.label}</h3>
-                    <p className="text-xl text-muted-foreground line-clamp-1">{res.address}</p>
-                  </div>
-                  <div className="p-4 bg-zinc-800/50 rounded-2xl">
-                    <Navigation className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                </motion.button>
+                  <button
+                    type="button"
+                    onClick={() => selectDiscoveredPlace(res)}
+                    className="flex min-w-0 flex-1 items-center gap-4 text-left transition-all active:scale-[0.99] md:gap-8"
+                  >
+                    <div className="rounded-3xl bg-primary/10 p-4 text-primary md:p-6">
+                      <MapPin className="h-7 w-7 md:h-10 md:w-10" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-xl font-black md:text-3xl">{res.label}</h3>
+                      <p className="line-clamp-1 text-sm text-muted-foreground md:text-xl">{res.address}</p>
+                    </div>
+                    <div className="rounded-2xl bg-zinc-800/50 p-3 md:p-4">
+                      <Navigation className="h-6 w-6 text-muted-foreground md:h-8 md:w-8" />
+                    </div>
+                  </button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => void handleQuickSave(res)}
+                    className="h-12 rounded-2xl border border-white/10 bg-black/20 px-4 font-black uppercase tracking-[0.18em] text-muted-foreground hover:bg-black/30 hover:text-white"
+                  >
+                    <Star className="mr-2 h-4 w-4" />
+                    Save
+                  </Button>
+                </motion.div>
               ))
             ) : showHistory ? (
               <div className="space-y-6">

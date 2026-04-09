@@ -1,14 +1,11 @@
 import React from 'react';
-import { useOSStore } from '@/store/use-os-store';
 import { X, Copy, Share2, QrCode, Power } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { useLiveTrackingState } from '@/store/os-domain-hooks';
 export function TrackingOverlay({ onClose }: { onClose: () => void }) {
-  const isSharingLive = useOSStore((s) => s.isSharingLive);
-  const trackingId = useOSStore((s) => s.trackingId);
-  const startLiveShare = useOSStore((s) => s.startLiveShare);
-  const stopLiveShare = useOSStore((s) => s.stopLiveShare);
+  const { isSharingLive, trackingId, startLiveShare, stopLiveShare } = useLiveTrackingState();
   const shareUrl = `${window.location.origin}/track/${trackingId}`;
   const copyLink = () => {
     navigator.clipboard.writeText(shareUrl);

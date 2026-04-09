@@ -36,6 +36,20 @@ import { WeatherWidget } from '@/components/drive/WeatherWidget';
 import { useOSStore } from '@/store/use-os-store';
 import { applyMarketTheme, getThemeById } from '@/lib/theme-market';
 import {
+  APP_INTEGRATION_TITLES,
+  INTEGRATED_APP_IDS,
+  buildDefaultIntegrationState,
+  canOpenIntegrationInsideApp,
+  isIntegratedAppId,
+  launchConnectedApp,
+  loadAppIntegrationState,
+  openConnectedAppInsideApp,
+  saveAppIntegrationState,
+  type AppIntegrationState,
+  type IntegratedAppId,
+  type InsideAppPresentation,
+} from '@/lib/app-integrations';
+import {
   askOllama,
   clearAssistantHistory,
   loadAssistantHistory,
@@ -78,170 +92,27 @@ const APPS: AppItem[] = [
   { id: 'radio', label: 'Radio', icon: Radio, color: 'bg-orange-500', embedded: 'radio' },
   { id: 'calendar', label: 'Calendar', icon: Calendar, color: 'bg-rose-500', embedded: 'calendar' },
   { id: 'safety', label: 'Safety', icon: Shield, color: 'bg-amber-500', embedded: 'safety' },
-  { id: 'theme-store', label: 'Themes', icon: Store, color: 'bg-fuchsia-500', embedded: 'themes' },
+  { id: 'theme-store', label: 'Store', icon: Store, color: 'bg-fuchsia-500', embedded: 'themes' },
   { id: 'settings', label: 'Settings', icon: Settings, color: 'bg-zinc-600', embedded: 'settings' },
 ];
 
 const EMBEDDED_TITLES: Record<EmbeddedAppId, string> = {
-  phone: 'Phone',
-  whatsapp: 'WhatsApp',
+  phone: APP_INTEGRATION_TITLES.phone,
+  whatsapp: APP_INTEGRATION_TITLES.whatsapp,
   weather: 'Weather',
   radio: 'Radio',
   calendar: 'Calendar',
   safety: 'Safety',
   nav: 'Maps',
-  themes: 'Themes',
+  themes: 'Store',
   settings: 'Settings',
   assistant: 'AI',
-  spotify: 'Spotify',
-  youtubeMusic: 'YouTube Music',
-};
-
-interface AppIntegrationPreset {
-  launchUrl: string;
-  webUrl: string;
-  supportsEmbed: boolean;
-  autoConnect: boolean;
-  helperText: string;
-}
-
-interface AppIntegrationState extends AppIntegrationPreset {
-  connected: boolean;
-  embedInPanel: boolean;
-  lastConnectedAt: number | null;
-}
-
-const APP_INTEGRATION_STORAGE_KEY = 'velocityos_app_integrations_v2';
-
-const INTEGRATED_APP_IDS = ['phone', 'whatsapp', 'spotify', 'youtubeMusic'] as const;
-
-type IntegratedAppId = (typeof INTEGRATED_APP_IDS)[number];
-
-const INTEGRATION_PRESETS: Record<IntegratedAppId, AppIntegrationPreset> = {
-  phone: {
-    launchUrl: 'tel:',
-    webUrl: '',
-    supportsEmbed: false,
-    autoConnect: false,
-    helperText: 'Opens your default phone dialer using tel: links.',
-  },
-  whatsapp: {
-    launchUrl: 'whatsapp://',
-    webUrl: 'https://web.whatsapp.com/',
-    supportsEmbed: true,
-    autoConnect: true,
-    helperText: 'Use WhatsApp Web directly in the app panel or launch native WhatsApp.',
-  },
-  spotify: {
-    launchUrl: 'spotify:',
-    webUrl: 'https://open.spotify.com/',
-    supportsEmbed: true,
-    autoConnect: true,
-    helperText: 'Use Spotify directly in the app panel or launch native Spotify.',
-  },
-  youtubeMusic: {
-    launchUrl: 'vnd.youtube.music://',
-    webUrl: 'https://music.youtube.com/',
-    supportsEmbed: true,
-    autoConnect: true,
-    helperText: 'Use YouTube Music directly in the app panel or launch native YT Music.',
-  },
+  spotify: APP_INTEGRATION_TITLES.spotify,
+  youtubeMusic: APP_INTEGRATION_TITLES.youtubeMusic,
 };
 
 function isIntegratedApp(appId: EmbeddedAppId): appId is IntegratedAppId {
-  return INTEGRATED_APP_IDS.includes(appId as IntegratedAppId);
-}
-
-function buildDefaultIntegrationState(appId: IntegratedAppId): AppIntegrationState {
-  const preset = INTEGRATION_PRESETS[appId];
-  return {
-    ...preset,
-    connected: preset.autoConnect,
-    embedInPanel: preset.supportsEmbed,
-    lastConnectedAt: preset.autoConnect ? Date.now() : null,
-  };
-}
-
-function loadAppIntegrationState(): Record<IntegratedAppId, AppIntegrationState> {
-  const defaults = INTEGRATED_APP_IDS.reduce((acc, appId) => {
-    acc[appId] = buildDefaultIntegrationState(appId);
-    return acc;
-  }, {} as Record<IntegratedAppId, AppIntegrationState>);
-
-  if (typeof window === 'undefined') return defaults;
-
-  try {
-    const raw = window.localStorage.getItem(APP_INTEGRATION_STORAGE_KEY);
-    if (!raw) return defaults;
-
-    const parsed = JSON.parse(raw) as Partial<Record<IntegratedAppId, Partial<AppIntegrationState>>>;
-
-    for (const appId of INTEGRATED_APP_IDS) {
-      const candidate = parsed?.[appId];
-      if (!candidate || typeof candidate !== 'object') continue;
-
-      defaults[appId] = {
-        ...defaults[appId],
-        connected: typeof candidate.connected === 'boolean' ? candidate.connected : defaults[appId].connected,
-        launchUrl: typeof candidate.launchUrl === 'string' ? candidate.launchUrl : defaults[appId].launchUrl,
-        webUrl: typeof candidate.webUrl === 'string' ? candidate.webUrl : defaults[appId].webUrl,
-        embedInPanel: typeof candidate.embedInPanel === 'boolean' ? candidate.embedInPanel : defaults[appId].embedInPanel,
-        lastConnectedAt:
-          typeof candidate.lastConnectedAt === 'number' && Number.isFinite(candidate.lastConnectedAt)
-            ? candidate.lastConnectedAt
-            : defaults[appId].lastConnectedAt,
-      };
-    }
-  } catch {
-    return defaults;
-  }
-
-  return defaults;
-}
-
-function saveAppIntegrationState(state: Record<IntegratedAppId, AppIntegrationState>): void {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(APP_INTEGRATION_STORAGE_KEY, JSON.stringify(state));
-}
-
-function launchConnectedApp(integration: AppIntegrationState): void {
-  const launchUrl = integration.launchUrl.trim();
-  const webUrl = integration.webUrl.trim();
-
-  if (!launchUrl && !webUrl) {
-    toast.error('Set at least one launch URL before opening this integration.');
-    return;
-  }
-
-  const openWebFallback = () => {
-    if (!webUrl) return;
-    window.location.assign(webUrl);
-  };
-
-  if (!launchUrl) {
-    openWebFallback();
-    return;
-  }
-
-  if (/^https?:\/\//i.test(launchUrl) || launchUrl.startsWith('/')) {
-    if (launchUrl.startsWith('/')) {
-      window.location.href = launchUrl;
-      return;
-    }
-    window.location.assign(launchUrl);
-    return;
-  }
-
-  const wasHidden = document.hidden;
-  window.location.href = launchUrl;
-
-  if (webUrl) {
-    window.setTimeout(() => {
-      if (!document.hidden && !wasHidden) {
-        openWebFallback();
-      }
-    }, 900);
-  }
+  return isIntegratedAppId(appId);
 }
 
 function createAssistantMessage(role: 'user' | 'assistant', content: string): AssistantMessage {
@@ -340,7 +211,7 @@ function SpotifyPanel() {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">
-        Spotify integration is available below. Connect once to launch the native app or web player instantly.
+        Spotify integration is available below. Connect once to launch the native app or open Spotify in a preview window that can expand to full screen.
       </div>
       <button
         onClick={() => window.location.assign('https://open.spotify.com/')}
@@ -356,7 +227,7 @@ function YouTubeMusicPanel() {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-rose-400/30 bg-rose-500/10 p-3 text-sm text-rose-100">
-        YouTube Music integration is available below. Connect to use app deep-link with web fallback.
+        YouTube Music integration is available below. Connect to use app deep-link or open a preview window that can switch to full screen inside VelocityOS.
       </div>
       <button
         onClick={() => window.location.assign('https://music.youtube.com/')}
@@ -369,16 +240,24 @@ function YouTubeMusicPanel() {
 }
 
 interface IntegrationDockProps {
-  appId: EmbeddedAppId;
   appTitle: string;
   integration: AppIntegrationState;
   onPatch: (patch: Partial<AppIntegrationState>) => void;
   onConnect: () => void;
   onDisconnect: () => void;
   onLaunch: () => void;
+  onOpenInsideApp: (presentation: InsideAppPresentation) => void;
 }
 
-function IntegrationDock({ appTitle, integration, onPatch, onConnect, onDisconnect, onLaunch }: IntegrationDockProps) {
+function IntegrationDock({
+  appTitle,
+  integration,
+  onPatch,
+  onConnect,
+  onDisconnect,
+  onLaunch,
+  onOpenInsideApp,
+}: IntegrationDockProps) {
   return (
     <div className="mt-4 space-y-3 rounded-xl border border-cyan-400/30 bg-cyan-500/10 p-3">
       <div className="flex items-center justify-between gap-2">
@@ -428,7 +307,7 @@ function IntegrationDock({ appTitle, integration, onPatch, onConnect, onDisconne
             onChange={(event) => onPatch({ embedInPanel: event.target.checked })}
             className="accent-cyan-400"
           />
-          Try inline web embed in panel
+          Show preview tools in VelocityOS
         </label>
       )}
 
@@ -443,8 +322,26 @@ function IntegrationDock({ appTitle, integration, onPatch, onConnect, onDisconne
           onClick={onLaunch}
           className="rounded-lg border border-emerald-300/40 bg-emerald-500/20 px-3 py-2 text-xs font-black uppercase tracking-wide text-emerald-100"
         >
-          <span className="inline-flex items-center gap-1"><ExternalLink className="w-3.5 h-3.5" /> Open Integrated App</span>
+          <span className="inline-flex items-center gap-1"><ExternalLink className="w-3.5 h-3.5" /> Open Native App</span>
         </button>
+        {integration.supportsEmbed && (
+          <>
+            <button
+              onClick={() => onOpenInsideApp('preview')}
+              disabled={!canOpenIntegrationInsideApp(integration)}
+              className="rounded-lg border border-sky-300/40 bg-sky-500/20 px-3 py-2 text-xs font-black uppercase tracking-wide text-sky-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="inline-flex items-center gap-1"><ExternalLink className="w-3.5 h-3.5" /> Preview Inside App</span>
+            </button>
+            <button
+              onClick={() => onOpenInsideApp('fullscreen')}
+              disabled={!canOpenIntegrationInsideApp(integration)}
+              className="rounded-lg border border-indigo-300/40 bg-indigo-500/20 px-3 py-2 text-xs font-black uppercase tracking-wide text-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="inline-flex items-center gap-1"><ExternalLink className="w-3.5 h-3.5" /> Start Full Screen</span>
+            </button>
+          </>
+        )}
         <button
           onClick={onDisconnect}
           className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs font-black uppercase tracking-wide text-muted-foreground"
@@ -454,16 +351,27 @@ function IntegrationDock({ appTitle, integration, onPatch, onConnect, onDisconne
       </div>
 
       {integration.connected && integration.embedInPanel && integration.webUrl && integration.supportsEmbed && (
-        <div className="space-y-2">
+        <div className="space-y-3 rounded-lg border border-white/15 bg-black/20 p-3">
           <div className="text-[10px] uppercase font-black tracking-wide text-muted-foreground">
-            Inline Preview (some services block embedding)
+            Preview Window
           </div>
-          <iframe
-            title={`${appTitle} web preview`}
-            src={integration.webUrl}
-            className="h-56 w-full rounded-lg border border-white/20 bg-black"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-presentation"
-          />
+          <div className="text-xs text-cyan-100/90">
+            Services like Spotify and YouTube Music often block iframe playback. VelocityOS keeps them usable with a native preview window instead, and you can expand it to full screen from the toolbar whenever you want.
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => onOpenInsideApp('preview')}
+              className="rounded-lg border border-sky-300/40 bg-sky-500/20 px-3 py-2 text-xs font-black uppercase tracking-wide text-sky-100"
+            >
+              <span className="inline-flex items-center gap-1"><ExternalLink className="w-3.5 h-3.5" /> Preview Now</span>
+            </button>
+            <button
+              onClick={() => onOpenInsideApp('fullscreen')}
+              className="rounded-lg border border-indigo-300/40 bg-indigo-500/20 px-3 py-2 text-xs font-black uppercase tracking-wide text-indigo-100"
+            >
+              <span className="inline-flex items-center gap-1"><ExternalLink className="w-3.5 h-3.5" /> Open Full Screen</span>
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -601,7 +509,7 @@ function ThemesPanel() {
         onClick={() => navigate('/theme-store')}
         className="rounded-lg border border-white/20 px-4 py-2 font-bold text-sm"
       >
-        Open Full Theme Store
+        Open Full Store
       </button>
     </div>
   );
@@ -906,6 +814,18 @@ export function AppsPage() {
     launchConnectedApp(integration);
   };
 
+  const openIntegrationInsideApp = async (appId: IntegratedAppId, presentation: InsideAppPresentation) => {
+    const integration = integrations[appId];
+    if (!integration.connected) {
+      toast.error(`Connect ${EMBEDDED_TITLES[appId]} first`);
+      return;
+    }
+    await openConnectedAppInsideApp(integration, {
+      title: EMBEDDED_TITLES[appId],
+      presentation,
+    });
+  };
+
   const connectAllApps = () => {
     setIntegrations((prev) => {
       const next = { ...prev };
@@ -1042,13 +962,13 @@ export function AppsPage() {
             <EmbeddedAppPanel id={activeEmbedded} />
             {activeIntegratedAppId && (
               <IntegrationDock
-                appId={activeIntegratedAppId}
                 appTitle={EMBEDDED_TITLES[activeIntegratedAppId]}
                 integration={integrations[activeIntegratedAppId]}
                 onPatch={(patch) => updateIntegration(activeIntegratedAppId, patch)}
                 onConnect={() => connectIntegration(activeIntegratedAppId)}
                 onDisconnect={() => disconnectIntegration(activeIntegratedAppId)}
                 onLaunch={() => launchIntegration(activeIntegratedAppId)}
+                onOpenInsideApp={(presentation) => void openIntegrationInsideApp(activeIntegratedAppId, presentation)}
               />
             )}
           </section>

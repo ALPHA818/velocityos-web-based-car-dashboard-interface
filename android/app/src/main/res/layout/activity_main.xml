@@ -9,4 +9,12 @@
     <WebView
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
+    <FrameLayout
+        android:id="@+id/embedded_web_view_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false"
+        android:focusable="false"
+        android:importantForAccessibility="noHideDescendants" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

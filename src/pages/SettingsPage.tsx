@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { usePWAInstall } from '@/hooks/use-pwa-install';
 import { cn } from "@/lib/utils";
 import { useIsLandscapeMobile } from '@/hooks/use-landscape-mobile';
+import { useNetworkStatus } from '@/hooks/use-network-status';
 import { useLocation } from 'react-router-dom';
 import {
   getNativeMonitorConfig,
@@ -34,6 +35,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { getAiVoicePreferences, speakWithAiVoice, stopAiVoice } from '@/lib/ai-voice';
+import { getAmbientEffectById, getScenePackById, getWidgetSkinById } from '@/lib/cosmetic-market';
+import { SystemStatusHub } from '@/components/system/SystemStatusHub';
+import { useLiveTrackingState, useParkedDemoState } from '@/store/os-domain-hooks';
 export function SettingsPage() {
   const location = useLocation();
   const units = useOSStore((s) => s.settings.units);
@@ -51,13 +55,72 @@ export function SettingsPage() {
   const aiVoiceRate = useOSStore((s) => s.settings.aiVoiceRate);
   const aiVoicePitch = useOSStore((s) => s.settings.aiVoicePitch);
   const aiVoiceVolume = useOSStore((s) => s.settings.aiVoiceVolume);
+  const activeScenePackId = useOSStore((s) => s.activeScenePackId);
+  const activeAmbientEffectId = useOSStore((s) => s.activeAmbientEffectId);
+  const activeWidgetSkinId = useOSStore((s) => s.activeWidgetSkinId);
   const gpsStatus = useOSStore((s) => s.gpsStatus);
+  const currentSpeed = useOSStore((s) => s.currentSpeed);
   const updateSettings = useOSStore((s) => s.updateSettings);
   const resetSystem = useOSStore((s) => s.resetSystem);
   const isLoading = useOSStore((s) => s.isLoading);
+  const { isSharingLive, trackingId } = useLiveTrackingState();
+  const { parkedDemoStatus, openParkedDemo } = useParkedDemoState();
   const { isInstallable, install } = usePWAInstall();
   const isLandscapeMobile = useIsLandscapeMobile();
+  const network = useNetworkStatus({ offlineGraceMs: 3000 });
   const isNativeMonitorAvailable = isNativeMonitorPluginAvailable();
+  const isParked = !currentSpeed || currentSpeed < 0.8;
+  const activeScene = getScenePackById(activeScenePackId) ?? getScenePackById('scene-garage-grid');
+  const activeAmbientEffect = getAmbientEffectById(activeAmbientEffectId) ?? getAmbientEffectById('effect-clear-air');
+  const activeWidgetSkin = getWidgetSkinById(activeWidgetSkinId) ?? getWidgetSkinById('widget-core-digital');
+
+  const settingsChromeClassName = activeWidgetSkin?.style === 'retro'
+    ? '[&_.dashboard-card]:border [&_.dashboard-card]:border-amber-300/20 [&_.dashboard-card]:bg-amber-950/18 [&_.dashboard-card]:backdrop-blur-xl [&_.dashboard-card]:shadow-[0_24px_64px_-42px_rgba(245,158,11,0.35)]'
+    : activeWidgetSkin?.style === 'motorsport'
+      ? '[&_.dashboard-card]:border [&_.dashboard-card]:border-rose-300/18 [&_.dashboard-card]:bg-zinc-950/42 [&_.dashboard-card]:backdrop-blur-xl [&_.dashboard-card]:shadow-[0_24px_64px_-42px_rgba(244,63,94,0.35)]'
+      : activeWidgetSkin?.style === 'luxury'
+        ? '[&_.dashboard-card]:border [&_.dashboard-card]:border-white/15 [&_.dashboard-card]:bg-stone-950/46 [&_.dashboard-card]:backdrop-blur-xl [&_.dashboard-card]:shadow-[0_24px_64px_-42px_rgba(251,191,36,0.24)]'
+        : activeWidgetSkin?.style === 'cyber'
+          ? '[&_.dashboard-card]:border [&_.dashboard-card]:border-emerald-400/18 [&_.dashboard-card]:bg-emerald-950/20 [&_.dashboard-card]:backdrop-blur-xl [&_.dashboard-card]:shadow-[0_24px_64px_-42px_rgba(16,185,129,0.28)]'
+          : activeWidgetSkin?.style === 'expedition'
+            ? '[&_.dashboard-card]:border [&_.dashboard-card]:border-lime-300/18 [&_.dashboard-card]:bg-lime-950/18 [&_.dashboard-card]:backdrop-blur-xl [&_.dashboard-card]:shadow-[0_24px_64px_-42px_rgba(132,204,22,0.28)]'
+            : '[&_.dashboard-card]:border [&_.dashboard-card]:border-white/10 [&_.dashboard-card]:bg-black/32 [&_.dashboard-card]:backdrop-blur-xl [&_.dashboard-card]:shadow-[0_24px_64px_-42px_rgba(59,130,246,0.22)]';
+
+  const heroCardClassName = activeWidgetSkin?.style === 'retro'
+    ? 'border-amber-300/22 bg-amber-950/20 text-amber-50'
+    : activeWidgetSkin?.style === 'motorsport'
+      ? 'border-rose-300/20 bg-zinc-950/45 text-rose-50'
+      : activeWidgetSkin?.style === 'luxury'
+        ? 'border-white/15 bg-stone-950/46 text-amber-50'
+        : activeWidgetSkin?.style === 'cyber'
+          ? 'border-emerald-400/20 bg-emerald-950/22 text-emerald-50'
+          : activeWidgetSkin?.style === 'expedition'
+            ? 'border-lime-300/20 bg-lime-950/22 text-lime-50'
+            : 'border-white/12 bg-black/35 text-foreground';
+
+  const heroTitleClassName = activeWidgetSkin?.style === 'retro'
+    ? 'font-mono text-amber-100 tracking-[0.05em]'
+    : activeWidgetSkin?.style === 'luxury'
+      ? 'font-serif text-amber-50'
+      : activeWidgetSkin?.style === 'cyber'
+        ? 'font-mono text-emerald-100 tracking-[0.05em]'
+        : activeWidgetSkin?.style === 'expedition'
+          ? 'font-mono text-lime-50 tracking-[0.04em]'
+          : activeWidgetSkin?.style === 'motorsport'
+            ? 'text-rose-50 tracking-tight'
+            : 'text-foreground';
+
+  const heroCaptionClassName = activeWidgetSkin?.style === 'retro'
+    ? 'text-amber-200/72'
+    : activeWidgetSkin?.style === 'motorsport'
+      ? 'text-rose-100/68'
+      : activeWidgetSkin?.style === 'luxury'
+        ? 'text-amber-100/68'
+        : activeWidgetSkin?.style === 'cyber'
+          ? 'text-cyan-200/72'
+          : activeWidgetSkin?.style === 'expedition'
+            ? 'text-lime-100/72'
+            : 'text-muted-foreground';
 
   const [monitorConfig, setMonitorConfig] = useState<NativeMonitorConfig | null>(null);
   const [isMonitorLoading, setIsMonitorLoading] = useState(true);
@@ -285,14 +348,54 @@ export function SettingsPage() {
   return (
     <CarLayout>
       <div className={cn(
-        "max-w-7xl mx-auto",
+        'relative max-w-7xl mx-auto overflow-hidden',
+        settingsChromeClassName,
         isLandscapeMobile ? "px-1.5 py-1.5 space-y-3" : "px-4 sm:px-6 lg:px-8 py-8 md:py-10 lg:py-12 space-y-12"
       )}>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-52 opacity-80 blur-3xl" style={{ background: `radial-gradient(circle at 16% 18%, ${activeScene?.accent ?? activeWidgetSkin?.accent ?? 'rgba(59,130,246,0.18)'} 0, transparent 44%)` }} />
         <header>
           <h1 className={cn("font-black tracking-tighter", isLandscapeMobile ? "text-2xl" : "text-6xl")}>System Settings</h1>
           <p className={cn("text-muted-foreground mt-2 font-medium", isLandscapeMobile ? "text-xs" : "text-2xl")}>Configure your VelocityOS experience</p>
         </header>
+        <section
+          className={cn('relative overflow-hidden rounded-[2rem] border backdrop-blur-xl', heroCardClassName, isLandscapeMobile ? 'p-3' : 'p-6')}
+          style={{ boxShadow: `0 28px 72px -44px ${activeScene?.glow ?? activeAmbientEffect?.accent ?? 'rgba(59,130,246,0.22)'}` }}
+        >
+          <div className="absolute inset-0 opacity-80" style={{ background: activeScene?.surface }} />
+          <div className="absolute -right-10 top-0 h-28 w-28 rounded-full blur-3xl" style={{ background: activeAmbientEffect?.accent }} />
+          <div className={cn('relative z-10 flex gap-4', isLandscapeMobile ? 'flex-col' : 'items-end justify-between')}>
+            <div>
+              <div className={cn('text-[10px] font-black uppercase tracking-[0.28em]', heroCaptionClassName)}>Active cockpit profile</div>
+              <h2 className={cn('mt-2 font-black tracking-tight', heroTitleClassName, isLandscapeMobile ? 'text-xl' : 'text-4xl')}>
+                Settings chrome now follows your store loadout
+              </h2>
+              <p className={cn('mt-2 max-w-3xl', heroCaptionClassName, isLandscapeMobile ? 'text-[11px]' : 'text-sm')}>
+                Widget skin styling, scene color, and ambient accents stay visible here while you tune the system.
+              </p>
+            </div>
+            <div className={cn('grid gap-2', isLandscapeMobile ? 'grid-cols-1' : 'grid-cols-3')}>
+              <div className="rounded-[1.35rem] border px-3 py-3" style={{ borderColor: `${activeWidgetSkin?.accent ?? 'rgba(255,255,255,0.12)'}44`, background: 'rgba(8,12,18,0.28)' }}>
+                <div className={cn('text-[10px] font-semibold uppercase tracking-[0.22em]', heroCaptionClassName)}>Widget skin</div>
+                <div className={cn('mt-1 font-black', heroTitleClassName, isLandscapeMobile ? 'text-sm' : 'text-base')}>{activeWidgetSkin?.label}</div>
+              </div>
+              <div className="rounded-[1.35rem] border px-3 py-3" style={{ borderColor: `${activeScene?.accent ?? 'rgba(255,255,255,0.12)'}44`, background: 'rgba(8,12,18,0.28)' }}>
+                <div className={cn('text-[10px] font-semibold uppercase tracking-[0.22em]', heroCaptionClassName)}>Scene</div>
+                <div className={cn('mt-1 font-black', heroTitleClassName, isLandscapeMobile ? 'text-sm' : 'text-base')}>{activeScene?.name}</div>
+              </div>
+              <div className="rounded-[1.35rem] border px-3 py-3" style={{ borderColor: `${activeAmbientEffect?.accent ?? 'rgba(255,255,255,0.12)'}44`, background: 'rgba(8,12,18,0.28)' }}>
+                <div className={cn('text-[10px] font-semibold uppercase tracking-[0.22em]', heroCaptionClassName)}>Ambient</div>
+                <div className={cn('mt-1 font-black', heroTitleClassName, isLandscapeMobile ? 'text-sm' : 'text-base')}>{activeAmbientEffect?.label}</div>
+              </div>
+            </div>
+          </div>
+        </section>
         <div className={cn(isLandscapeMobile ? "space-y-3" : "space-y-8")}>
+          <div id="settings-personalization" className={cn(isLandscapeMobile ? "space-y-3" : "space-y-8")}>
+            <div className="space-y-1">
+              <div className={cn("font-black uppercase tracking-[0.22em] text-primary/75", isLandscapeMobile ? "text-[10px]" : "text-xs")}>Personalization</div>
+              <h2 className={cn("font-black tracking-tight", isLandscapeMobile ? "text-xl" : "text-3xl")}>Tune the driving experience</h2>
+              <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[11px]" : "text-sm")}>Visual styling, map feel, voice behavior, and daily driving preferences.</p>
+            </div>
           <section className={cn("dashboard-card", isLandscapeMobile ? "space-y-3" : "space-y-8")}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -672,6 +775,23 @@ export function SettingsPage() {
               <span className={cn("font-black uppercase", isLandscapeMobile ? "text-[10px]" : "text-xs")}>AI chat history saved on-device</span>
             </div>
           </section>
+          </div>
+          <div id="settings-health" className={cn(isLandscapeMobile ? "space-y-3" : "space-y-8")}>
+            <div className="space-y-1">
+              <div className={cn("font-black uppercase tracking-[0.22em] text-primary/75", isLandscapeMobile ? "text-[10px]" : "text-xs")}>System Health</div>
+              <h2 className={cn("font-black tracking-tight", isLandscapeMobile ? "text-xl" : "text-3xl")}>Keep the car app operational</h2>
+              <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[11px]" : "text-sm")}>Native monitor readiness, hardware state, installation, and recovery actions.</p>
+            </div>
+            <SystemStatusHub
+              variant="hub"
+              gpsStatus={gpsStatus}
+              network={network}
+              micEnabled={aiVoiceControlEnabled}
+              isSharingLive={isSharingLive}
+              trackingId={trackingId}
+              nativeMonitorConfig={monitorConfig}
+              isLandscapeMobile={isLandscapeMobile}
+            />
           <section className={cn("dashboard-card", isLandscapeMobile ? "space-y-3" : "space-y-8")}>
             <div className="flex items-center gap-4">
               <Gauge className={cn("text-primary", isLandscapeMobile ? "w-5 h-5" : "w-12 h-12")} />
@@ -835,16 +955,31 @@ export function SettingsPage() {
               <h2 className={cn("font-bold", isLandscapeMobile ? "text-base" : "text-3xl")}>Hardware & Status</h2>
             </div>
             <div className={cn("grid grid-cols-1 md:grid-cols-2", isLandscapeMobile ? "gap-2" : "gap-6")}>
-              <div className={cn("flex items-center justify-between bg-white/5 border border-white/10", isLandscapeMobile ? "p-3 rounded-xl" : "p-6 rounded-[2rem]")}>
-                <span className={cn("font-bold", isLandscapeMobile ? "text-sm" : "text-xl")}>GPS Telemetry</span>
-                {gpsStatus === 'granted' ? (
-                  <div className={cn("flex items-center text-green-500 font-black uppercase", isLandscapeMobile ? "gap-2 text-xs" : "gap-3")}><CheckCircle className={cn(isLandscapeMobile ? "w-4 h-4" : "w-6 h-6")} /> Online</div>
-                ) : (
-                  <div className={cn("flex items-center text-destructive font-black uppercase", isLandscapeMobile ? "gap-2 text-xs" : "gap-3")}><XCircle className={cn(isLandscapeMobile ? "w-4 h-4" : "w-6 h-6")} /> {gpsStatus === 'denied' ? 'Offline' : 'Searching'}</div>
-                )}
+              <div className={cn("flex items-center justify-between gap-3 bg-white/5 border border-white/10", isLandscapeMobile ? "p-3 rounded-xl" : "p-6 rounded-[2rem]")}>
+                <div>
+                  <span className={cn("font-bold", isLandscapeMobile ? "text-sm" : "text-xl")}>Parked learning mode</span>
+                  <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[11px] mt-1" : "text-sm mt-2")}>
+                    {parkedDemoStatus === 'completed'
+                      ? 'Replay the onboarding flow any time you want a safe walkthrough of navigation, voice, themes, and media.'
+                      : parkedDemoStatus === 'dismissed'
+                        ? 'The guided demo is ready to resume the next time you want a parked walkthrough.'
+                        : 'Finish the parked demo before driving to learn the core cockpit controls.'}
+                  </p>
+                </div>
+                <Button
+                  onClick={openParkedDemo}
+                  className={cn("font-black shrink-0", isLandscapeMobile ? "h-10 rounded-lg px-3 text-xs" : "h-12 rounded-2xl px-5 text-sm")}
+                >
+                  {parkedDemoStatus === 'completed' ? 'Replay Demo' : parkedDemoStatus === 'dismissed' ? 'Resume Demo' : 'Start Demo'}
+                </Button>
               </div>
               <div className={cn("flex items-center justify-between bg-white/5 border border-white/10", isLandscapeMobile ? "p-3 rounded-xl" : "p-6 rounded-[2rem]")}>
-                <span className={cn("font-bold", isLandscapeMobile ? "text-sm" : "text-xl")}>Stay Awake API</span>
+                <div>
+                  <span className={cn("font-bold", isLandscapeMobile ? "text-sm" : "text-xl")}>Stay Awake API</span>
+                  <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[11px] mt-1" : "text-sm mt-2")}>
+                    {isParked ? 'Ready to keep the dashboard active during setup and demos.' : 'Screen wake support stays available while the car is moving.'}
+                  </p>
+                </div>
                 {'wakeLock' in navigator ? (
                   <div className={cn("flex items-center text-green-500 font-black uppercase", isLandscapeMobile ? "gap-2 text-xs" : "gap-3")}><CheckCircle className={cn(isLandscapeMobile ? "w-4 h-4" : "w-6 h-6")} /> Ready</div>
                 ) : (
@@ -891,6 +1026,7 @@ export function SettingsPage() {
               </AlertDialogContent>
             </AlertDialog>
           </section>
+          </div>
         </div>
         <footer className={cn("text-center text-muted-foreground flex flex-col items-center justify-center opacity-40", isLandscapeMobile ? "gap-2 pb-2" : "gap-4 pb-12")}>
           <div className="flex items-center gap-3">

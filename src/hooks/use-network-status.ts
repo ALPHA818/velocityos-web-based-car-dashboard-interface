@@ -15,7 +15,7 @@ interface NavigatorWithConnection extends Navigator {
   webkitConnection?: NetworkInformationLike;
 }
 
-interface NetworkStatus {
+export interface NetworkStatus {
   isOnline: boolean;
   connectionType: string | null;
   effectiveType: string | null;

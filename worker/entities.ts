@@ -1,5 +1,5 @@
 import { IndexedEntity, Entity } from "./core-utils";
-import type { User, Chat, ChatMessage, UserSettings, SavedLocation } from "@shared/types";
+import type { User, Chat, ChatMessage, UserSettings, SavedLocation, TrackingState } from "@shared/types";
 import { MOCK_CHAT_MESSAGES, MOCK_CHATS, MOCK_USERS } from "@shared/mock-data";
 export class UserEntity extends IndexedEntity<User> {
   static readonly entityName = "user";
@@ -54,13 +54,6 @@ export class SearchHistoryEntity extends Entity<GenericListState<SavedLocation>>
   static readonly entityName = "search-history";
   static readonly initialState: GenericListState<SavedLocation> = { items: [] };
 }
-export interface TrackingState {
-  lat: number;
-  lon: number;
-  speed: number;
-  heading: number;
-  lastUpdate: number;
-}
 export class TrackingEntity extends Entity<TrackingState> {
   static readonly entityName = "tracking";
   static readonly initialState: TrackingState = {
@@ -68,7 +61,11 @@ export class TrackingEntity extends Entity<TrackingState> {
     lon: 0,
     speed: 0,
     heading: 0,
-    lastUpdate: 0
+    lastUpdate: 0,
+    startedAt: 0,
+    durationMs: 0,
+    distanceKm: 0,
+    path: [],
   };
 }
 export type ChatBoardState = Chat & { messages: ChatMessage[] };

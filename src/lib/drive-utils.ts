@@ -1,5 +1,40 @@
 export const getWazeLink = (lat: number, lon: number) => `https://www.waze.com/ul?ll=${encodeURIComponent(`${lat},${lon}`)}&navigate=yes`;
 export const getGoogleMapsLink = (lat: number, lon: number) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${lat},${lon}`)}&travelmode=driving`;
+
+interface GoogleMapsEmbedOptions {
+  focus?: {
+    label?: string | null;
+    address?: string | null;
+    lat: number;
+    lon: number;
+  } | null;
+  currentPos?: [number, number] | null;
+  zoom?: number;
+}
+
+function getGoogleMapsPreviewQuery(options: GoogleMapsEmbedOptions = {}): string {
+  const zoom = Math.max(3, Math.min(20, Math.round(options.zoom ?? 15)));
+
+  if (options.focus) {
+    const focusQuery = options.focus.address?.trim() || options.focus.label?.trim() || `${options.focus.lat},${options.focus.lon}`;
+    return `hl=en&q=${encodeURIComponent(focusQuery)}&ll=${options.focus.lat},${options.focus.lon}&z=${zoom}`;
+  }
+
+  if (options.currentPos) {
+    return `hl=en&ll=${options.currentPos[0]},${options.currentPos[1]}&z=${zoom}`;
+  }
+
+  return 'hl=en&ll=40.7128,-74.0060&z=15';
+}
+
+export function getGoogleMapsEmbedUrl(options: GoogleMapsEmbedOptions = {}): string {
+  return `https://www.google.com/maps?output=embed&${getGoogleMapsPreviewQuery(options)}`;
+}
+
+export function getGoogleMapsPreviewUrl(options: GoogleMapsEmbedOptions = {}): string {
+  return `https://www.google.com/maps?${getGoogleMapsPreviewQuery(options)}`;
+}
+
 export const requestWakeLock = async () => {
   if ('wakeLock' in navigator) {
     if (document.visibilityState !== 'visible') return null;

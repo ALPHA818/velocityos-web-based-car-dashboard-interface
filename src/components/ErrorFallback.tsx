@@ -1,7 +1,6 @@
 import React from 'react';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { AlertTriangle } from 'lucide-react';
+import { SystemStatePanel } from '@/components/system/SystemStatePanel';
 
 export interface ErrorFallbackProps {
   title?: string;
@@ -40,58 +39,30 @@ export function ErrorFallback({
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md">
-        {/* Animated background gradient */}
-        <div className="absolute inset-0 bg-gradient-rainbow opacity-5 dark:opacity-10" />
-        
-        {/* Error card */}
-        <Card className="relative backdrop-blur-sm shadow-2xl">
-          <CardContent className="p-8 space-y-6">
-            {/* Icon and title */}
-            <div className="text-center space-y-4">
-              <div className="mx-auto w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center">
-                <AlertTriangle className="w-8 h-8 text-destructive" />
-              </div>
-              <h1 className="text-2xl font-bold">{title}</h1>
-              <p className="text-muted-foreground">{message}</p>
-            </div>
+      <div className="w-full max-w-xl space-y-4">
+        <SystemStatePanel
+          kind="error"
+          eyebrow={statusMessage || 'System alert'}
+          title={title}
+          message={message}
+          icon={AlertTriangle}
+          primaryAction={{ label: 'Try Again', onClick: handleRetry }}
+          secondaryAction={{ label: 'Go Home', onClick: handleGoHome }}
+          className="bg-black/35"
+        />
 
-            {/* Status indicator */}
-            {statusMessage && (
-              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                <span>{statusMessage}</span>
-              </div>
-            )}
+        {process.env.NODE_ENV === 'development' && showErrorDetails && error && (
+          <details className="rounded-[1.5rem] border border-white/10 bg-black/30 p-4">
+            <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              Error details (Development only)
+            </summary>
+            <pre className="mt-3 max-h-40 overflow-auto text-xs text-muted-foreground">
+              {error.message || error.toString()}
+              {error.stack && '\n\n' + error.stack + '\n\n' + error.componentStack}
+            </pre>
+          </details>
+        )}
 
-            {/* Action buttons */}
-            <div className="space-y-3">
-              <Button onClick={handleRetry} className="w-full">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Try Again
-              </Button>
-              <Button onClick={handleGoHome} variant="secondary" className="w-full">
-                <Home className="w-4 h-4 mr-2" />
-                Go to Homepage
-              </Button>
-            </div>
-
-            {/* Error details (collapsible) */}
-            {process.env.NODE_ENV === 'development' && showErrorDetails && error && (
-              <details className="mt-6 p-4 bg-muted/50 rounded-lg">
-                <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                  Error details (Development only)
-                </summary>
-                <pre className="mt-3 text-xs overflow-auto max-h-40 text-muted-foreground">
-                  {error.message || error.toString()}
-                  {error.stack && '\n\n' + error.stack + '\n\n' + error.componentStack}
-                </pre>
-              </details>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Support text */}
         <p className="text-center text-sm text-muted-foreground mt-6">
           If this problem persists, please contact our support team
         </p>

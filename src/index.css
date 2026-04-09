@@ -45,8 +45,6 @@
     scrollbar-width: none;
   }
 }
-/* MapLibre standard styles */
-@import "maplibre-gl/dist/maplibre-gl.css";
 /* Theme Filters applied to the canvas */
 .map-vibrant-filter .maplibregl-canvas {
   filter: brightness(1.1) contrast(1.4) saturate(1.3);
@@ -82,6 +80,32 @@
   }
   .text-neon {
     text-shadow: 0 0 10px rgba(59, 130, 246, 0.5), 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+  .sidebar-scrollbar {
+    scrollbar-gutter: stable;
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(255, 255, 255, 0.32) rgba(255, 255, 255, 0.08) !important;
+    -ms-overflow-style: auto;
+  }
+  .sidebar-scrollbar::-webkit-scrollbar {
+    display: block;
+  }
+  .sidebar-scrollbar[data-scroll-axis="x"]::-webkit-scrollbar {
+    height: 0.35rem;
+  }
+  .sidebar-scrollbar[data-scroll-axis="y"]::-webkit-scrollbar {
+    width: 0.35rem;
+  }
+  .sidebar-scrollbar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 9999px;
+  }
+  .sidebar-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.32);
+    border-radius: 9999px;
+  }
+  .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.46);
   }
 }
 .max-w-7xl-car {

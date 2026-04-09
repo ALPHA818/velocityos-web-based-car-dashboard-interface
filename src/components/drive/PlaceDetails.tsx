@@ -1,30 +1,26 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useOSStore } from '@/store/use-os-store';
-import { Navigation, Star, Share2, X, MapPin, Globe, Compass, CheckCircle } from 'lucide-react';
+import { Briefcase, CheckCircle, Globe, Home, MapPin, Share2, Star, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useNavigationSearchState } from '@/store/os-domain-hooks';
+
+type SaveCategory = 'home' | 'work' | 'favorite';
+
 export function PlaceDetails() {
-  const place = useOSStore(s => s.selectedDiscoveredPlace);
-  const selectPlace = useOSStore(s => s.selectDiscoveredPlace);
-  const addLocation = useOSStore(s => s.addLocation);
-  const locations = useOSStore(s => s.locations);
-  const isSaved = locations.some(l =>
-    l.lat.toFixed(5) === place?.lat.toFixed(5) &&
-    l.lon.toFixed(5) === place?.lon.toFixed(5)
-  );
-  const handleSave = async () => {
+  const { selectedDiscoveredPlace: place, selectDiscoveredPlace: selectPlace, saveSelectedPlace, locations } = useNavigationSearchState();
+  const isSavedByCategory = React.useMemo(() => ({
+    favorite: locations.some((location) => location.category === 'favorite' && location.lat.toFixed(5) === place?.lat.toFixed(5) && location.lon.toFixed(5) === place?.lon.toFixed(5)),
+    home: locations.some((location) => location.category === 'home' && location.lat.toFixed(5) === place?.lat.toFixed(5) && location.lon.toFixed(5) === place?.lon.toFixed(5)),
+    work: locations.some((location) => location.category === 'work' && location.lat.toFixed(5) === place?.lat.toFixed(5) && location.lon.toFixed(5) === place?.lon.toFixed(5)),
+  }), [locations, place?.lat, place?.lon]);
+
+  const handleSave = async (category: SaveCategory) => {
     if (!place) return;
     try {
-      await addLocation({
-        label: place.label,
-        address: place.address,
-        category: 'favorite',
-        lat: place.lat,
-        lon: place.lon,
-      });
-      toast.success('Location saved to favorites');
+      await saveSelectedPlace(category);
+      toast.success(category === 'favorite' ? 'Location saved to favorites' : `Location saved as ${category}`);
     } catch (e) {
       toast.error('Failed to save location');
     }
@@ -70,14 +66,38 @@ export function PlaceDetails() {
             <Button
               variant="secondary"
               size="lg"
-              disabled={isSaved}
-              onClick={handleSave}
+              disabled={isSavedByCategory.home}
+              onClick={() => void handleSave('home')}
               className={cn(
                 "h-20 w-20 rounded-3xl transition-all",
-                isSaved ? "bg-green-500/20 text-green-500 border-green-500/30 shadow-[0_0_20px_rgba(34,197,94,0.3)]" : "bg-white/5 hover:bg-white/10"
+                isSavedByCategory.home ? "bg-green-500/20 text-green-500 border-green-500/30 shadow-[0_0_20px_rgba(34,197,94,0.3)]" : "bg-white/5 hover:bg-white/10"
               )}
             >
-              {isSaved ? <CheckCircle className="w-10 h-10" /> : <Star className="w-10 h-10" />}
+              {isSavedByCategory.home ? <CheckCircle className="w-10 h-10" /> : <Home className="w-10 h-10" />}
+            </Button>
+            <Button
+              variant="secondary"
+              size="lg"
+              disabled={isSavedByCategory.work}
+              onClick={() => void handleSave('work')}
+              className={cn(
+                "h-20 w-20 rounded-3xl transition-all",
+                isSavedByCategory.work ? "bg-green-500/20 text-green-500 border-green-500/30 shadow-[0_0_20px_rgba(34,197,94,0.3)]" : "bg-white/5 hover:bg-white/10"
+              )}
+            >
+              {isSavedByCategory.work ? <CheckCircle className="w-10 h-10" /> : <Briefcase className="w-10 h-10" />}
+            </Button>
+            <Button
+              variant="secondary"
+              size="lg"
+              disabled={isSavedByCategory.favorite}
+              onClick={() => void handleSave('favorite')}
+              className={cn(
+                "h-20 w-20 rounded-3xl transition-all",
+                isSavedByCategory.favorite ? "bg-green-500/20 text-green-500 border-green-500/30 shadow-[0_0_20px_rgba(34,197,94,0.3)]" : "bg-white/5 hover:bg-white/10"
+              )}
+            >
+              {isSavedByCategory.favorite ? <CheckCircle className="w-10 h-10" /> : <Star className="w-10 h-10" />}
             </Button>
             <Button
               variant="default"

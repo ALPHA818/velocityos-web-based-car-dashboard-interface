@@ -2,7 +2,18 @@ import { Hono } from "hono";
 import type { Env } from './core-utils';
 import { UserEntity, SettingsEntity, LocationEntity, TrackingEntity, RecentHistoryEntity, SearchHistoryEntity } from "./entities";
 import { ok, bad, notFound } from './core-utils';
-import type { UserSettings, SavedLocation } from "@shared/types";
+import type { TrackingBreadcrumb, UserSettings, SavedLocation } from "@shared/types";
+
+function haversineDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const earthRadiusMeters = 6371000;
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const deltaLat = toRadians(lat2 - lat1);
+  const deltaLon = toRadians(lon2 - lon1);
+  const a = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(deltaLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusMeters * c;
+}
 
 function normalizeSettings(settings: Partial<UserSettings> | null | undefined): UserSettings {
   return {
@@ -34,9 +45,21 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
   });
   app.post('/api/locations', async (c) => {
     const data = await c.req.json<SavedLocation>();
-    if (!data.label || !data.lat || !data.lon) return bad(c, 'Invalid location data');
+    const hasValidLabel = typeof data.label === 'string' && data.label.trim().length > 0;
+    const hasValidLat = Number.isFinite(data.lat) && Math.abs(data.lat) <= 90;
+    const hasValidLon = Number.isFinite(data.lon) && Math.abs(data.lon) <= 180;
+
+    if (!hasValidLabel || !hasValidLat || !hasValidLon) {
+      return bad(c, 'Invalid location data');
+    }
+
     const id = data.id || crypto.randomUUID();
-    const location = await LocationEntity.create(c.env, { ...data, id });
+    const location = await LocationEntity.create(c.env, {
+      ...data,
+      id,
+      label: data.label.trim(),
+      address: typeof data.address === 'string' ? data.address.trim() : '',
+    });
     return ok(c, location);
   });
   app.delete('/api/locations/:id', async (c) => {
@@ -91,9 +114,51 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     return ok(c, state);
   });
   app.post('/api/tracking/:id', async (c) => {
-    const data = await c.req.json<any>();
+    const data = await c.req.json<Partial<{ lat: number; lon: number; speed: number; heading: number }>>();
     const entity = new TrackingEntity(c.env, c.req.param('id'));
-    await entity.save({ ...data, lastUpdate: Date.now() });
+    const now = Date.now();
+
+    await entity.mutate((current) => {
+      const hasLat = typeof data.lat === 'number' && Number.isFinite(data.lat);
+      const hasLon = typeof data.lon === 'number' && Number.isFinite(data.lon);
+      const nextLat = hasLat ? data.lat! : current.lat;
+      const nextLon = hasLon ? data.lon! : current.lon;
+      const nextSpeed = typeof data.speed === 'number' && Number.isFinite(data.speed) ? data.speed : current.speed;
+      const nextHeading = typeof data.heading === 'number' && Number.isFinite(data.heading) ? data.heading : current.heading;
+      const nextPath = [...(current.path ?? [])];
+      let nextDistanceKm = current.distanceKm ?? 0;
+
+      if (hasLat && hasLon) {
+        const nextPoint: TrackingBreadcrumb = [nextLat, nextLon, now];
+        const lastPoint = nextPath[nextPath.length - 1];
+
+        if (!lastPoint) {
+          nextPath.push(nextPoint);
+        } else if (lastPoint[0] !== nextLat || lastPoint[1] !== nextLon) {
+          const segmentMeters = haversineDistanceMeters(lastPoint[0], lastPoint[1], nextLat, nextLon);
+          if (segmentMeters > 1 && segmentMeters < 250) {
+            nextDistanceKm = Number((nextDistanceKm + segmentMeters / 1000).toFixed(3));
+            nextPath.push(nextPoint);
+          }
+        }
+      }
+
+      const startedAt = current.startedAt || now;
+
+      return {
+        ...current,
+        lat: nextLat,
+        lon: nextLon,
+        speed: nextSpeed,
+        heading: nextHeading,
+        lastUpdate: now,
+        startedAt,
+        durationMs: Math.max(0, now - startedAt),
+        distanceKm: nextDistanceKm,
+        path: nextPath,
+      };
+    });
+
     return ok(c, { success: true });
   });
   // SYSTEM

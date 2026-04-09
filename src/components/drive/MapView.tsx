@@ -1,35 +1,60 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import Map, { Source, Layer, Marker } from 'react-map-gl/maplibre';
+import Map, { Source, Layer, Marker, type MapRef } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useOSStore } from '@/store/use-os-store';
 import { getCategoryColor, getMapStyle, getMapFilter } from '@/lib/nav-utils';
 import type { GeoJSON } from 'geojson';
-import { X, Navigation, Share2, Compass, Globe, Search } from 'lucide-react';
+import { X, Navigation, Share2, Compass, Globe, Search, ExternalLink, Route, Timer, Gauge } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TrackingOverlay } from './TrackingOverlay';
 import { SearchOverlay } from './SearchOverlay';
 import { PlaceDetails } from './PlaceDetails';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useIsLandscapeMobile } from '@/hooks/use-landscape-mobile';
+import { MapCarIcon } from './MapCarIcon';
+import { formatDriveDistance, formatDriveDuration, getLiveDriveTrip, getPathGeoJson, getTripDurationMs } from '@/lib/live-drive';
+import { formatRouteDistance, formatRouteMinutes, getNavigationAlert } from '@/lib/navigation-status';
+import { closeEmbeddedWebView, isEmbeddedWebViewAvailable, openInlineEmbeddedWebView } from '@/lib/embedded-web-view';
+import { getGoogleMapsEmbedUrl, getGoogleMapsLink, getGoogleMapsPreviewUrl } from '@/lib/drive-utils';
+import { useDriveSessionState, useLiveTrackingState, useNavigationCollectionsState, useNavigationMapShellState, useNavigationSearchState, useNavigationStatusState } from '@/store/os-domain-hooks';
+
+const MAP_CAMERA_UPDATE_INTERVAL_MS = 550;
+const MAP_CAMERA_TOP_DOWN_UPDATE_INTERVAL_MS = 1000;
+const MAP_CAMERA_MIN_POSITION_DELTA = 0.000025;
+const MAP_CAMERA_TOP_DOWN_MIN_POSITION_DELTA = 0.00006;
+const MAP_CAMERA_MIN_HEADING_DELTA = 6;
+const GOOGLE_MAP_RECENTER_DELTA = 0.0015;
+
+function getHeadingDelta(previous: number | null | undefined, next: number | null | undefined) {
+  if (previous == null || next == null) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const rawDelta = Math.abs(previous - next);
+  return Math.min(rawDelta, 360 - rawDelta);
+}
+
 export function MapView() {
-  const isMapOpen = useOSStore(s => s.isMapOpen);
-  const closeMap = useOSStore(s => s.closeMap);
-  const activeRoute = useOSStore(s => s.activeRoute);
-  const activeDestination = useOSStore(s => s.activeDestination);
-  const isFollowing = useOSStore(s => s.isFollowing);
-  const setFollowing = useOSStore(s => s.setFollowing);
-  const isSharingLive = useOSStore(s => s.isSharingLive);
+  const { isMapOpen, closeMap, isFollowing, setFollowing, currentPos, currentHeading } = useNavigationMapShellState();
+  const { gpsStatus, activeRoute, activeDestination, routeState, routeFailureKind, routeFailureMessage, lastGpsFixAt } = useNavigationStatusState();
+  const { isSharingLive } = useLiveTrackingState();
+  const { trips, units } = useDriveSessionState();
+  const mapProvider = useOSStore(s => s.settings.mapProvider);
   const mapTheme = useOSStore(s => s.settings.mapTheme);
   const mapPerspective = useOSStore(s => s.settings.mapPerspective);
-  const toggleMapPerspective = useOSStore(s => s.toggleMapPerspective);
-  const currentPos = useOSStore(s => s.currentPos);
-  const currentHeading = useOSStore(s => s.currentHeading);
-  const locations = useOSStore(s => s.locations);
-  const setSearchOverlay = useOSStore(s => s.setSearchOverlay);
-  const discoveredPlace = useOSStore(s => s.selectedDiscoveredPlace);
-  const mapRef = useRef<any>(null);
+  const setMapPerspective = useOSStore(s => s.setMapPerspective);
+  const activeMapIconId = useOSStore(s => s.activeMapIconId);
+  const { locations } = useNavigationCollectionsState();
+  const { setSearchOverlay, selectedDiscoveredPlace: discoveredPlace } = useNavigationSearchState();
+  const mapRef = useRef<MapRef | null>(null);
+  const nativePreviewSurfaceRef = useRef<HTMLDivElement | null>(null);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCameraSyncRef = useRef<{
+    timestamp: number;
+    position: [number, number] | null;
+    heading: number | null;
+  } | null>(null);
   const isLandscapeMobile = useIsLandscapeMobile();
   const topActionButtonClass = isLandscapeMobile
     ? "h-10 w-10 rounded-xl"
@@ -41,26 +66,114 @@ export function MapView() {
     ? "w-4 h-4"
     : "w-5 h-5 sm:w-6 sm:h-6 md:w-12 md:h-12";
   const [showShare, setShowShare] = React.useState(false);
+  const [googleMapCenter, setGoogleMapCenter] = useState<[number, number] | null>(currentPos);
+  const [nativePreviewStatus, setNativePreviewStatus] = useState<'idle' | 'opening' | 'opened' | 'failed'>('idle');
+  const nativePreviewUrlRef = useRef<string | null>(null);
+  const nativePreviewRequestSyncRef = useRef<(() => void) | null>(null);
+  const nativePreviewLayoutKeyRef = useRef<string | null>(null);
+  const navigationAlert = getNavigationAlert({
+    gpsStatus,
+    routeState,
+    routeFailureKind,
+    routeFailureMessage,
+    lastGpsFixAt,
+    activeDestination,
+    activeRoute,
+  });
+  const liveDriveTrip = useMemo(() => getLiveDriveTrip(trips), [trips]);
+  const shouldShowLiveDrive = Boolean(!activeDestination && !discoveredPlace && liveDriveTrip);
+  const liveDriveDurationMs = liveDriveTrip ? getTripDurationMs(liveDriveTrip) : 0;
+  const useGooglePreview = mapProvider === 'google' && !shouldShowLiveDrive;
+  const useNativeGooglePreview = useGooglePreview && isEmbeddedWebViewAvailable();
+  const useEmbeddedGoogleMap = useGooglePreview && (!useNativeGooglePreview || nativePreviewStatus === 'failed');
+  const liveDriveGeoJSON = useMemo((): GeoJSON.Feature<GeoJSON.LineString> | null => {
+    if (!shouldShowLiveDrive) return null;
+    return getPathGeoJson(liveDriveTrip);
+  }, [liveDriveTrip, shouldShowLiveDrive]);
+
   useEffect(() => {
-    if (isMapOpen && currentPos && isFollowing && mapRef.current) {
-      const isDriving = mapPerspective === 'driving';
-      const easeOptions: any = {
-        center: [currentPos[1], currentPos[0]],
-        zoom: isDriving ? 17.8 : 15.2,
-        pitch: isDriving ? 65 : 0,
-        bearing: isDriving ? (currentHeading ?? 0) : 0,
-        duration: 1200,
-        essential: true,
-      };
-      if (isDriving) {
-        // Offset the center slightly so the car is at the bottom 1/3 of the screen for better foresight
-        easeOptions.padding = { top: isLandscapeMobile ? 160 : 350, bottom: 0, left: 0, right: 0 };
-      } else {
-        easeOptions.padding = { top: 0, bottom: 0, left: 0, right: 0 };
-      }
-      mapRef.current?.easeTo(easeOptions);
+    if (useEmbeddedGoogleMap) {
+      return;
     }
-  }, [currentPos, currentHeading, isFollowing, isMapOpen, mapPerspective, isLandscapeMobile]);
+
+    if (!isMapOpen || !currentPos || !isFollowing || !mapRef.current) {
+      if (!isMapOpen || !isFollowing) {
+        lastCameraSyncRef.current = null;
+      }
+      return;
+    }
+
+    const isDriving = mapPerspective === 'driving';
+    const heading = typeof currentHeading === 'number' && !Number.isNaN(currentHeading) ? currentHeading : null;
+    const now = Date.now();
+    const lastSync = lastCameraSyncRef.current;
+    const positionDeltaThreshold = isDriving ? MAP_CAMERA_MIN_POSITION_DELTA : MAP_CAMERA_TOP_DOWN_MIN_POSITION_DELTA;
+    const updateInterval = isDriving ? MAP_CAMERA_UPDATE_INTERVAL_MS : MAP_CAMERA_TOP_DOWN_UPDATE_INTERVAL_MS;
+    const movedEnough = !lastSync?.position
+      || Math.abs(currentPos[0] - lastSync.position[0]) >= positionDeltaThreshold
+      || Math.abs(currentPos[1] - lastSync.position[1]) >= positionDeltaThreshold;
+    const turnedEnough = isDriving && getHeadingDelta(lastSync?.heading, heading) >= MAP_CAMERA_MIN_HEADING_DELTA;
+    const intervalElapsed = !lastSync || now - lastSync.timestamp >= updateInterval;
+
+    if (!movedEnough && !turnedEnough && !intervalElapsed) {
+      return;
+    }
+
+    const easeOptions = {
+      center: [currentPos[1], currentPos[0]] as [number, number],
+      zoom: isDriving ? 17.8 : 15.2,
+      pitch: isDriving ? 65 : 0,
+      bearing: isDriving ? (heading ?? 0) : 0,
+      duration: isDriving ? 420 : 520,
+      essential: true,
+      padding: isDriving
+        ? { top: isLandscapeMobile ? 160 : 350, bottom: 0, left: 0, right: 0 }
+        : { top: 0, bottom: 0, left: 0, right: 0 },
+    };
+
+    mapRef.current.stop();
+    mapRef.current.easeTo(easeOptions);
+    lastCameraSyncRef.current = {
+      timestamp: now,
+      position: currentPos,
+      heading,
+    };
+  }, [currentPos, currentHeading, isFollowing, isMapOpen, mapPerspective, isLandscapeMobile, useEmbeddedGoogleMap]);
+
+  useEffect(() => {
+    if (!isMapOpen || !useGooglePreview) {
+      return;
+    }
+
+    if (discoveredPlace) {
+      setGoogleMapCenter([discoveredPlace.lat, discoveredPlace.lon]);
+      return;
+    }
+
+    if (activeDestination) {
+      setGoogleMapCenter([activeDestination.lat, activeDestination.lon]);
+      return;
+    }
+
+    if (currentPos && (isFollowing || !googleMapCenter)) {
+      if (
+        !googleMapCenter
+        || Math.abs(currentPos[0] - googleMapCenter[0]) >= GOOGLE_MAP_RECENTER_DELTA
+        || Math.abs(currentPos[1] - googleMapCenter[1]) >= GOOGLE_MAP_RECENTER_DELTA
+      ) {
+        setGoogleMapCenter(currentPos);
+      }
+    }
+  }, [activeDestination, currentPos, discoveredPlace, googleMapCenter, isFollowing, isMapOpen, useGooglePreview]);
+
+  useEffect(() => {
+    return () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (map) map.getCanvas().style.filter = getMapFilter(mapTheme);
@@ -71,6 +184,44 @@ export function MapView() {
     inactivityTimerRef.current = setTimeout(() => setFollowing(true), 15000);
   };
   const mapStyle = useMemo(() => getMapStyle(mapTheme), [mapTheme]);
+  const googleMapUrl = useMemo(() => {
+    const focusPlace = discoveredPlace ?? activeDestination;
+    const zoom = mapPerspective === 'driving' ? 17 : 15;
+
+    return getGoogleMapsEmbedUrl({
+      focus: focusPlace ? {
+        label: focusPlace.label,
+        address: focusPlace.address,
+        lat: focusPlace.lat,
+        lon: focusPlace.lon,
+      } : null,
+      currentPos: googleMapCenter,
+      zoom,
+    });
+  }, [activeDestination, discoveredPlace, googleMapCenter, mapPerspective]);
+  const googlePreviewUrl = useMemo(() => {
+    const focusPlace = discoveredPlace ?? activeDestination;
+    const zoom = mapPerspective === 'driving' ? 17 : 15;
+
+    return getGoogleMapsPreviewUrl({
+      focus: focusPlace ? {
+        label: focusPlace.label,
+        address: focusPlace.address,
+        lat: focusPlace.lat,
+        lon: focusPlace.lon,
+      } : null,
+      currentPos: googleMapCenter ?? currentPos,
+      zoom,
+    });
+  }, [activeDestination, currentPos, discoveredPlace, googleMapCenter, mapPerspective]);
+  const googleDirectionsUrl = useMemo(() => {
+    const target = discoveredPlace ?? activeDestination;
+    if (!target) {
+      const anchor = googleMapCenter ?? currentPos;
+      return anchor ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${anchor[0]},${anchor[1]}`)}` : 'https://www.google.com/maps';
+    }
+    return getGoogleMapsLink(target.lat, target.lon);
+  }, [activeDestination, currentPos, discoveredPlace, googleMapCenter]);
   const routeGeoJSON = useMemo((): GeoJSON.Feature<GeoJSON.LineString> | null => {
     if (!activeRoute) return null;
     return {
@@ -79,80 +230,240 @@ export function MapView() {
       geometry: { type: 'LineString', coordinates: activeRoute.coordinates.map(c => [c[1], c[0]]) }
     };
   }, [activeRoute]);
+
+  useEffect(() => {
+    nativePreviewUrlRef.current = googlePreviewUrl;
+  }, [googlePreviewUrl]);
+
+  useEffect(() => {
+    if (!isMapOpen || !useNativeGooglePreview) {
+      nativePreviewRequestSyncRef.current = null;
+      nativePreviewLayoutKeyRef.current = null;
+      nativePreviewUrlRef.current = null;
+      setNativePreviewStatus('idle');
+      void closeEmbeddedWebView();
+      return;
+    }
+
+    let isDisposed = false;
+
+    const syncNativePreview = () => {
+      const surface = nativePreviewSurfaceRef.current;
+      const url = nativePreviewUrlRef.current;
+      if (!surface) {
+        return;
+      }
+
+      if (!url) {
+        return;
+      }
+
+      const bounds = surface.getBoundingClientRect();
+      if (bounds.width < 1 || bounds.height < 1) {
+        return;
+      }
+
+      const scale = window.devicePixelRatio || 1;
+      const x = Math.round(bounds.left * scale);
+      const y = Math.round(bounds.top * scale);
+      const width = Math.round(bounds.width * scale);
+      const height = Math.round(bounds.height * scale);
+      const layoutKey = `${url}|${x}|${y}|${width}|${height}`;
+
+      if (nativePreviewLayoutKeyRef.current === layoutKey) {
+        return;
+      }
+
+      nativePreviewLayoutKeyRef.current = layoutKey;
+
+      setNativePreviewStatus((status) => status === 'opened' ? status : 'opening');
+
+      void openInlineEmbeddedWebView({
+        url,
+        x,
+        y,
+        width,
+        height,
+      }).then((opened) => {
+        if (isDisposed) {
+          return;
+        }
+
+        setNativePreviewStatus(opened ? 'opened' : 'failed');
+        if (!opened) {
+          nativePreviewLayoutKeyRef.current = null;
+          nativePreviewUrlRef.current = null;
+          void closeEmbeddedWebView();
+        }
+      });
+    };
+
+    let frameId: number | null = null;
+    const requestSync = () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        syncNativePreview();
+      });
+    };
+
+    nativePreviewRequestSyncRef.current = requestSync;
+
+    const resizeObserver = typeof ResizeObserver !== 'undefined' && nativePreviewSurfaceRef.current
+      ? new ResizeObserver(() => requestSync())
+      : null;
+
+    if (nativePreviewSurfaceRef.current && resizeObserver) {
+      resizeObserver.observe(nativePreviewSurfaceRef.current);
+    }
+
+    window.addEventListener('resize', requestSync);
+    window.addEventListener('scroll', requestSync, true);
+    requestSync();
+
+    return () => {
+      isDisposed = true;
+      nativePreviewRequestSyncRef.current = null;
+      nativePreviewLayoutKeyRef.current = null;
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', requestSync);
+      window.removeEventListener('scroll', requestSync, true);
+      void closeEmbeddedWebView();
+    };
+  }, [isMapOpen, useNativeGooglePreview]);
+
+  useEffect(() => {
+    if (!isMapOpen || !useNativeGooglePreview || nativePreviewStatus === 'failed') {
+      return;
+    }
+
+    nativePreviewLayoutKeyRef.current = null;
+    nativePreviewRequestSyncRef.current?.();
+  }, [googlePreviewUrl, isMapOpen, nativePreviewStatus, useNativeGooglePreview]);
+
+  const locationMarkers = useMemo(() => locations.map((loc) => (
+    <Marker key={loc.id} longitude={loc.lon} latitude={loc.lat}>
+      <div
+        className="custom-pin-icon w-8 h-8 rounded-full border-4 border-white shadow-glow transition-all"
+        style={{
+          backgroundColor: getCategoryColor(loc.category),
+          transform: activeDestination?.id === loc.id ? 'scale(1.5) translateY(-10px)' : 'scale(1)'
+        }}
+      />
+    </Marker>
+  )), [locations, activeDestination?.id]);
+
+  const isNativePreviewVisible = useNativeGooglePreview && nativePreviewStatus !== 'failed';
+
   if (!isMapOpen) return null;
   return (
-    <div className="fixed inset-0 z-[100] bg-black overflow-hidden">
-      <Map
-        ref={mapRef}
-        initialViewState={{
-          longitude: currentPos ? currentPos[1] : -74.006,
-          latitude: currentPos ? currentPos[0] : 40.7128,
-          zoom: 13,
-          pitch: mapPerspective === 'driving' ? 65 : 0,
-          bearing: 0
-        }}
-        mapStyle={mapStyle}
-        onDrag={handleMapInteraction}
-        onWheel={handleMapInteraction}
-        style={{ width: '100%', height: '100%' }}
-      >
-        {currentPos && (
-          <Marker longitude={currentPos[1]} latitude={currentPos[0]}>
-            <div className="relative flex items-center justify-center">
-              <motion.div 
-                animate={{ scale: [1, 2.5], opacity: [0.3, 0] }} 
-                transition={{ repeat: Infinity, duration: 2 }} 
-                className="absolute w-14 h-14 bg-primary rounded-full blur-md" 
-              />
-              <div 
-                className="custom-user-icon w-14 h-14 bg-primary border-[5px] border-white rounded-full shadow-glow-lg z-10 flex items-center justify-center transition-transform duration-500 ease-out"
-                style={{ transform: `rotate(${currentHeading ?? 0}deg)` }}
-              >
-                <Navigation className="w-7 h-7 text-white fill-current" />
-              </div>
+    <div ref={nativePreviewSurfaceRef} className="relative h-full min-h-0 w-full overflow-hidden rounded-[1.5rem] border border-white/10 bg-black overscroll-none shadow-[0_24px_80px_-36px_rgba(0,0,0,0.85)] md:rounded-[2.5rem]">
+      {isNativePreviewVisible ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-black px-6 text-center text-white/70">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.24em] text-white/45">Google Maps</div>
+            <div className="mt-3 text-lg font-black text-white">
+              {nativePreviewStatus === 'opening' ? 'Opening embedded map…' : 'Google Maps is running inside this tab.'}
             </div>
-          </Marker>
-        )}
-        {discoveredPlace && (
-          <Marker longitude={discoveredPlace.lon} latitude={discoveredPlace.lat}>
-            <motion.div 
-              initial={{ scale: 0, y: -20 }}
-              animate={{ scale: 1, y: 0 }}
-              className="w-14 h-14 bg-primary border-4 border-white rounded-full shadow-glow-lg flex items-center justify-center"
-            >
-              <Globe className="w-7 h-7 text-white" />
-            </motion.div>
-          </Marker>
-        )}
-        {locations.map((loc) => (
-          <Marker key={loc.id} longitude={loc.lon} latitude={loc.lat}>
-            <div
-              className="custom-pin-icon w-8 h-8 rounded-full border-4 border-white shadow-glow transition-all"
-              style={{ 
-                backgroundColor: getCategoryColor(loc.category), 
-                transform: activeDestination?.id === loc.id ? 'scale(1.5) translateY(-10px)' : 'scale(1)' 
-              }}
-            />
-          </Marker>
-        ))}
-        {routeGeoJSON && (
-          <Source id="route-source" type="geojson" data={routeGeoJSON}>
-            <Layer id="route-layer-glow" type="line" paint={{ 'line-color': '#3b82f6', 'line-width': 24, 'line-opacity': 0.3, 'line-blur': 15 }} />
-            <Layer id="route-layer" type="line" layout={{ 'line-join': 'round', 'line-cap': 'round' }} paint={{ 'line-color': '#3b82f6', 'line-width': 12, 'line-opacity': 1 }} />
-          </Source>
-        )}
-      </Map>
+            <div className="mt-2 max-w-sm text-sm text-white/55">
+              Android uses the native webview here so Google Maps can pan with one finger without opening a separate popup window.
+            </div>
+          </div>
+        </div>
+      ) : useEmbeddedGoogleMap ? (
+        <div className="absolute inset-0 bg-black overscroll-none">
+          <iframe
+            key={googleMapUrl}
+            src={googleMapUrl}
+            title="Google Maps Preview"
+            className="h-full w-full border-0"
+            referrerPolicy="no-referrer-when-downgrade"
+            allowFullScreen
+            style={{ filter: getMapFilter(mapTheme) }}
+          />
+        </div>
+      ) : (
+        <Map
+          ref={mapRef}
+          initialViewState={{
+            longitude: currentPos ? currentPos[1] : -74.006,
+            latitude: currentPos ? currentPos[0] : 40.7128,
+            zoom: 13,
+            pitch: mapPerspective === 'driving' ? 65 : 0,
+            bearing: 0
+          }}
+          mapStyle={mapStyle}
+          onDrag={handleMapInteraction}
+          onWheel={handleMapInteraction}
+          style={{ width: '100%', height: '100%' }}
+        >
+          {currentPos && (
+            <Marker longitude={currentPos[1]} latitude={currentPos[0]}>
+              <MapCarIcon
+                iconId={activeMapIconId}
+                heading={currentHeading}
+                size={isLandscapeMobile ? 66 : 88}
+                animated
+                showPulse
+              />
+            </Marker>
+          )}
+          {discoveredPlace && (
+            <Marker longitude={discoveredPlace.lon} latitude={discoveredPlace.lat}>
+              <motion.div 
+                initial={{ scale: 0, y: -20 }}
+                animate={{ scale: 1, y: 0 }}
+                className="w-14 h-14 bg-primary border-4 border-white rounded-full shadow-glow-lg flex items-center justify-center"
+              >
+                <Globe className="w-7 h-7 text-white" />
+              </motion.div>
+            </Marker>
+          )}
+          {locationMarkers}
+          {liveDriveGeoJSON && !activeRoute && (
+            <Source id="live-drive-source" type="geojson" data={liveDriveGeoJSON}>
+              <Layer id="live-drive-layer-glow" type="line" paint={{ 'line-color': '#22c55e', 'line-width': 18, 'line-opacity': 0.24, 'line-blur': 12 }} />
+              <Layer id="live-drive-layer" type="line" layout={{ 'line-join': 'round', 'line-cap': 'round' }} paint={{ 'line-color': '#34d399', 'line-width': 7, 'line-opacity': 0.95 }} />
+            </Source>
+          )}
+          {routeGeoJSON && (
+            <Source id="route-source" type="geojson" data={routeGeoJSON}>
+              <Layer id="route-layer-glow" type="line" paint={{ 'line-color': '#3b82f6', 'line-width': 24, 'line-opacity': 0.3, 'line-blur': 15 }} />
+              <Layer id="route-layer" type="line" layout={{ 'line-join': 'round', 'line-cap': 'round' }} paint={{ 'line-color': '#3b82f6', 'line-width': 12, 'line-opacity': 1 }} />
+            </Source>
+          )}
+        </Map>
+      )}
+      {!isNativePreviewVisible && (
+        <>
       <div className={cn(
         "absolute z-[110] flex justify-between items-start",
-        isLandscapeMobile ? "top-2 left-2 right-2" : "top-8 left-32 right-8"
+        isLandscapeMobile ? "top-2 left-2 right-2" : "top-6 left-6 right-6"
       )}>
         <div className="flex gap-4">
           <Button variant="secondary" size="lg" onClick={closeMap} className={cn(topActionButtonClass, "bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-90 transition-transform")}>
             <X className={actionIconClass} />
           </Button>
-          <AnimatePresence>
-            {(activeDestination || discoveredPlace) && (
+          {useEmbeddedGoogleMap && (
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => window.open(googleDirectionsUrl, '_blank', 'noopener,noreferrer')}
+              className={cn(topActionButtonClass, "bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-90 transition-transform")}
+            >
+              <ExternalLink className={actionIconClass} />
+            </Button>
+          )}
+          <AnimatePresence mode="wait">
+            {(activeDestination || discoveredPlace) ? (
               <motion.div 
+                key="destination-panel"
                 initial={{ opacity: 0, x: -20 }} 
                 animate={{ opacity: 1, x: 0 }} 
                 exit={{ opacity: 0, x: -20 }} 
@@ -164,8 +475,61 @@ export function MapView() {
                 <span className="text-xl sm:text-2xl md:text-4xl font-black text-white truncate max-w-[180px] sm:max-w-[250px] md:max-w-[400px] text-neon">
                   {(activeDestination || discoveredPlace)?.label}
                 </span>
+                <span className="mt-2 text-[10px] md:text-xs font-bold uppercase tracking-[0.18em] text-white/70">
+                  {navigationAlert?.compactLabel ?? 'Destination pinned'}
+                  {activeRoute ? ` • ${formatRouteDistance(activeRoute.distance)} • ${formatRouteMinutes(activeRoute.duration)}` : ''}
+                </span>
+                {useEmbeddedGoogleMap && (
+                  <span className="mt-1 text-[10px] md:text-xs font-bold uppercase tracking-[0.18em] text-white/55">
+                    Google preview shows nearby shops and points of interest.
+                  </span>
+                )}
               </motion.div>
-            )}
+            ) : shouldShowLiveDrive ? (
+              <motion.div
+                key="live-drive-panel"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="bg-zinc-950/88 backdrop-blur-3xl p-3 sm:p-4 md:p-6 rounded-2xl md:rounded-[2.5rem] flex flex-col justify-center min-w-[190px] sm:min-w-[250px] md:min-w-[390px] border border-emerald-400/25 shadow-glow-lg"
+              >
+                <span className="text-[10px] md:text-xs uppercase font-black text-emerald-200/75 tracking-widest flex items-center gap-1.5 md:gap-2">
+                  <Route className="w-3.5 h-3.5 md:w-4 md:h-4" /> Live Drive
+                </span>
+                <span className="text-xl sm:text-2xl md:text-4xl font-black text-white text-neon">
+                  {liveDriveTrip?.endTime ? 'Last untethered drive' : 'Recording the road behind you'}
+                </span>
+                <span className="mt-2 text-[11px] md:text-sm text-white/72 max-w-[340px]">
+                  {liveDriveTrip?.endTime
+                    ? 'No destination was pinned, so VelocityOS kept the breadcrumb trail of the path you actually drove.'
+                    : 'No point of interest is armed, so VelocityOS is tracing your exact path in real time.'}
+                </span>
+                <div className="mt-3 grid grid-cols-3 gap-2 md:gap-3">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55 flex items-center gap-1.5">
+                      <Gauge className="h-3.5 w-3.5" /> Distance
+                    </div>
+                    <div className="mt-1 font-black text-sm md:text-lg tabular-nums text-white">
+                      {formatDriveDistance(liveDriveTrip?.distanceKm ?? 0, units)}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55 flex items-center gap-1.5">
+                      <Timer className="h-3.5 w-3.5" /> Time
+                    </div>
+                    <div className="mt-1 font-black text-sm md:text-lg tabular-nums text-white">
+                      {formatDriveDuration(liveDriveDurationMs)}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">Status</div>
+                    <div className="mt-1 font-black text-sm md:text-lg uppercase text-white">
+                      {liveDriveTrip?.endTime ? 'Complete' : 'Active'}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ) : null}
           </AnimatePresence>
         </div>
         <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
@@ -193,7 +557,7 @@ export function MapView() {
       </div>
       <div className={cn(
         "absolute z-[110] flex flex-col",
-        isLandscapeMobile ? "bottom-2 right-2 gap-2" : "bottom-10 right-10 gap-6"
+        isLandscapeMobile ? "bottom-2 right-2 gap-2" : "bottom-6 right-6 gap-4"
       )}>
         <Button 
           variant={mapPerspective === 'top-down' ? "default" : "secondary"} 
@@ -205,7 +569,7 @@ export function MapView() {
               ? cn("bg-primary text-white", isLandscapeMobile ? "scale-100" : "scale-110")
               : "bg-zinc-950/90 text-muted-foreground"
           )} 
-          onClick={() => toggleMapPerspective()}
+          onClick={() => setMapPerspective('top-down')}
         >
           <Globe className={actionIconClass} />
         </Button>
@@ -219,7 +583,7 @@ export function MapView() {
               ? cn("bg-primary text-white", isLandscapeMobile ? "scale-100" : "scale-110")
               : "bg-zinc-950/90 text-muted-foreground"
           )} 
-          onClick={() => toggleMapPerspective()}
+          onClick={() => setMapPerspective('driving')}
         >
           <Navigation className={actionIconClass} />
         </Button>
@@ -231,7 +595,12 @@ export function MapView() {
             "backdrop-blur-3xl border border-white/10 shadow-glow-lg transition-all", 
             isFollowing ? "bg-primary" : "bg-zinc-950/90"
           )} 
-          onClick={() => setFollowing(true)}
+          onClick={() => {
+            setFollowing(true);
+            if (mapProvider === 'google' && currentPos) {
+              setGoogleMapCenter(currentPos);
+            }
+          }}
         >
           <Compass className={cn(actionIconClass, isFollowing && "animate-pulse")} />
         </Button>
@@ -239,6 +608,8 @@ export function MapView() {
       <PlaceDetails />
       <SearchOverlay />
       {showShare && <TrackingOverlay onClose={() => setShowShare(false)} />}
+        </>
+      )}
     </div>
   );
 }

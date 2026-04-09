@@ -9,6 +9,12 @@ export interface NativeMonitorConfig {
   isDefaultLauncher: boolean;
 }
 
+export interface NativeMonitorStatusSummary {
+  label: string;
+  detail: string;
+  tone: 'healthy' | 'warning' | 'inactive';
+}
+
 interface NativeMonitorPlugin {
   getConfig(): Promise<NativeMonitorConfig>;
   setConfig(config: Partial<NativeMonitorConfig>): Promise<NativeMonitorConfig>;
@@ -165,4 +171,36 @@ export async function openNativeMonitorAppSettings(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export function summarizeNativeMonitorStatus(config: NativeMonitorConfig | null | undefined): NativeMonitorStatusSummary {
+  if (!config) {
+    return {
+      label: 'Unavailable',
+      detail: 'Native monitor configuration is unavailable right now.',
+      tone: 'warning',
+    };
+  }
+
+  if (!config.enabled) {
+    return {
+      label: 'Disabled',
+      detail: 'Speed-triggered reopening is turned off for this device.',
+      tone: 'inactive',
+    };
+  }
+
+  if (config.strictAutoOpen && !config.isDeviceOwner && !config.isDefaultLauncher) {
+    return {
+      label: 'Needs launcher role',
+      detail: 'Strict auto-open is enabled, but launcher or device-owner privileges are still missing.',
+      tone: 'warning',
+    };
+  }
+
+  return {
+    label: 'Ready',
+    detail: `Background speed monitor is armed at ${Math.round(config.thresholdKph)} km/h with a ${config.cooldownSeconds}s cooldown.`,
+    tone: 'healthy',
+  };
 }

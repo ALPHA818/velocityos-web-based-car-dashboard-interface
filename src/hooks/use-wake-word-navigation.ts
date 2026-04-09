@@ -104,11 +104,14 @@ export function useWakeWordNavigation(options: UseWakeWordNavigationOptions): Wa
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>(options.enabled ? 'on' : 'off');
   const [voiceMode, setVoiceMode] = useState<VoiceMode>('unsupported');
   const recognitionRef = useRef<VoiceRecognitionLike | null>(null);
+  const optionsRef = useRef(options);
   const enabledRef = useRef(options.enabled);
   const modeRef = useRef<VoiceMode>('unsupported');
   const isListeningRef = useRef(false);
   const quickEndCounterRef = useRef(0);
   const lastStartAtRef = useRef(0);
+  const restartTimerRef = useRef<number | null>(null);
+  const isVisibleRef = useRef(typeof document === 'undefined' ? true : document.visibilityState === 'visible');
   const pushToTalkStarterRef = useRef<() => void>(() => {
     // No-op until recognizer is initialized.
   });
@@ -117,6 +120,7 @@ export function useWakeWordNavigation(options: UseWakeWordNavigationOptions): Wa
   });
 
   enabledRef.current = options.enabled;
+  optionsRef.current = options;
 
   const triggerPushToTalk = useCallback(() => {
     pushToTalkStarterRef.current();
@@ -145,6 +149,10 @@ export function useWakeWordNavigation(options: UseWakeWordNavigationOptions): Wa
     }
 
     if (!options.enabled) {
+      if (restartTimerRef.current !== null) {
+        window.clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
       modeRef.current = 'continuous';
       setVoiceMode('continuous');
       setVoiceStatus('off');
@@ -171,20 +179,33 @@ export function useWakeWordNavigation(options: UseWakeWordNavigationOptions): Wa
       recognition.lang = 'en-US';
     };
 
-    const applyPushToTalkMode = () => {
-      if (disposed) return;
-      modeRef.current = 'push-to-talk';
-      setVoiceMode('push-to-talk');
-      setVoiceStatus('on');
+    const clearRestartTimer = () => {
+      if (restartTimerRef.current !== null) {
+        window.clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
+    };
+
+    const stopRecognition = (nextStatus: VoiceStatus) => {
+      clearRestartTimer();
       try {
         recognition.stop();
       } catch {
         // Ignore stop failures when already stopped.
       }
+      isListeningRef.current = false;
+      setVoiceStatus(nextStatus);
+    };
+
+    const applyPushToTalkMode = () => {
+      if (disposed) return;
+      modeRef.current = 'push-to-talk';
+      setVoiceMode('push-to-talk');
+      stopRecognition(isVisibleRef.current ? 'on' : 'off');
     };
 
     const startContinuousListening = () => {
-      if (disposed || !enabledRef.current || modeRef.current !== 'continuous') return;
+      if (disposed || !enabledRef.current || !isVisibleRef.current || modeRef.current !== 'continuous') return;
       configureRecognition(true);
       lastStartAtRef.current = Date.now();
       try {
@@ -197,7 +218,7 @@ export function useWakeWordNavigation(options: UseWakeWordNavigationOptions): Wa
     };
 
     const startPushToTalkListening = () => {
-      if (disposed || !enabledRef.current || modeRef.current !== 'push-to-talk') return;
+      if (disposed || !enabledRef.current || !isVisibleRef.current || modeRef.current !== 'push-to-talk') return;
       if (isListeningRef.current) return;
 
       configureRecognition(false);
@@ -216,49 +237,68 @@ export function useWakeWordNavigation(options: UseWakeWordNavigationOptions): Wa
     };
 
     stopListeningRef.current = () => {
-      try {
-        recognition.stop();
-      } catch {
-        // Ignore stop failures when already stopped.
-      }
-      isListeningRef.current = false;
-      setVoiceStatus(enabledRef.current ? 'on' : 'off');
+      stopRecognition(enabledRef.current && isVisibleRef.current ? 'on' : 'off');
     };
+
+    const handleVisibilityChange = () => {
+      const isVisible = document.visibilityState === 'visible';
+      isVisibleRef.current = isVisible;
+
+      if (!isVisible) {
+        stopRecognition('off');
+        return;
+      }
+
+      if (!enabledRef.current) {
+        setVoiceStatus('off');
+        return;
+      }
+
+      if (modeRef.current === 'continuous') {
+        startContinuousListening();
+        return;
+      }
+
+      setVoiceStatus('on');
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     recognition.onresult = (event) => {
       if (disposed) return;
+      const latestOptions = optionsRef.current;
       const lastResult = event.results[event.results.length - 1];
       if (!lastResult || !lastResult.length) return;
 
       const transcript = String(lastResult[0]?.transcript || '').trim();
       if (!transcript) return;
 
-      const command = extractCommand(transcript, options.wakeWord);
+      const command = extractCommand(transcript, latestOptions.wakeWord);
       if (command === null) return;
       if (!command) return;
 
       if (/\b(close|hide)\b.*\bmap\b/.test(command)) {
-        if (options.isMapOpen) {
-          options.closeMap();
+        if (latestOptions.isMapOpen) {
+          latestOptions.closeMap();
         }
         return;
       }
 
       if (/\b(open|show)\b.*\bmap\b/.test(command) || /^map$/.test(command)) {
-        if (!options.isMapOpen) {
-          options.openMap();
+        if (!latestOptions.isMapOpen) {
+          latestOptions.openMap();
         }
         return;
       }
 
       const route = routeCommand(command);
       if (route) {
-        options.navigateTo(route);
+        latestOptions.navigateTo(route);
         return;
       }
 
-      if (options.onUnhandledCommand) {
-        options.onUnhandledCommand(command);
+      if (latestOptions.onUnhandledCommand) {
+        latestOptions.onUnhandledCommand(command);
       }
     };
 
@@ -288,6 +328,11 @@ export function useWakeWordNavigation(options: UseWakeWordNavigationOptions): Wa
       if (disposed || !enabledRef.current) return;
       isListeningRef.current = false;
 
+      if (!isVisibleRef.current) {
+        setVoiceStatus('off');
+        return;
+      }
+
       if (modeRef.current === 'continuous') {
         const elapsed = Date.now() - lastStartAtRef.current;
         quickEndCounterRef.current = elapsed < 900 ? quickEndCounterRef.current + 1 : 0;
@@ -298,7 +343,10 @@ export function useWakeWordNavigation(options: UseWakeWordNavigationOptions): Wa
           return;
         }
 
-        window.setTimeout(() => {
+        clearRestartTimer();
+
+        restartTimerRef.current = window.setTimeout(() => {
+          restartTimerRef.current = null;
           if (disposed || !enabledRef.current || modeRef.current !== 'continuous') return;
           startContinuousListening();
         }, 400);
@@ -318,6 +366,8 @@ export function useWakeWordNavigation(options: UseWakeWordNavigationOptions): Wa
       stopListeningRef.current = () => {
         // Hook disposed.
       };
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearRestartTimer();
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -332,11 +382,6 @@ export function useWakeWordNavigation(options: UseWakeWordNavigationOptions): Wa
   }, [
     options.enabled,
     options.wakeWord,
-    options.isMapOpen,
-    options.navigateTo,
-    options.openMap,
-    options.closeMap,
-    options.onUnhandledCommand,
   ]);
 
   return {

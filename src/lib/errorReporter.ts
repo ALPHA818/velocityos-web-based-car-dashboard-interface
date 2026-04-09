@@ -3,6 +3,8 @@ interface BaseErrorData {
   timestamp: string;
 }
 
+import { recordTelemetryEvent } from '@/lib/telemetry';
+
 interface ErrorReport extends BaseErrorData {
   message: string;
   stack?: string;
@@ -557,6 +559,18 @@ class ErrorReporter {
     }
 
     try {
+      recordTelemetryEvent({
+        type: error.source === 'react-router' ? 'route-failure' : 'diagnostic',
+        level: error.level,
+        message: error.message,
+        route: window.location.pathname,
+        metadata: {
+          category: error.category,
+          source: error.source,
+          errorBoundary: error.errorBoundary,
+        },
+      });
+
       this.errorQueue.push(error);
 
       // Limit queue size
@@ -623,6 +637,13 @@ class ErrorReporter {
         error.message
       );
     } catch (err) {
+      recordTelemetryEvent({
+        type: 'diagnostic',
+        level: 'warning',
+        message: 'Client error delivery failed.',
+        route: window.location.pathname,
+        metadata: { originalMessage: error.message },
+      });
       console.error("[ErrorReporter] Failed to send error:", err);
       throw err;
     }

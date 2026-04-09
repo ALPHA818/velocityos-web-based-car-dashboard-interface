@@ -1,18 +1,23 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import Map, { Marker } from 'react-map-gl/maplibre';
+import Map, { Marker, Source, Layer } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { getMapStyle, getMapFilter } from '@/lib/nav-utils';
-import { Wifi, Clock, Gauge, Navigation } from 'lucide-react';
+import { Wifi, Clock, Gauge, Navigation, Route, Timer } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { formatDistanceToNow } from 'date-fns';
 import type { TrackingState } from '@shared/types';
+import { useOSStore } from '@/store/use-os-store';
+import { MapCarIcon } from '@/components/drive/MapCarIcon';
+import { formatDriveDistance, formatDriveDuration, getPathGeoJson } from '@/lib/live-drive';
 export function TrackingPage() {
   const { id } = useParams();
   const [data, setData] = useState<TrackingState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mapRef = useRef<any>(null);
   const mapStyle = useMemo(() => getMapStyle('dark'), []);
+  const activeMapIconId = useOSStore((s) => s.activeMapIconId);
+  const pathGeoJSON = useMemo(() => getPathGeoJson(data), [data]);
   useEffect(() => {
     const applyFilter = () => {
       const map = mapRef.current?.getMap();
@@ -35,13 +40,33 @@ export function TrackingPage() {
         const res = await api<TrackingState>(`/api/tracking/${id}`);
         setData(res);
         if (mapRef.current) {
-          mapRef.current?.flyTo({
-            center: [res.lon, res.lat],
-            zoom: 15,
-            bearing: res.heading || 0,
-            essential: true,
-            duration: 2000
-          });
+          if (res.path.length > 1) {
+            const bounds = res.path.reduce((acc, [lat, lon]) => {
+              acc.minLat = Math.min(acc.minLat, lat);
+              acc.maxLat = Math.max(acc.maxLat, lat);
+              acc.minLon = Math.min(acc.minLon, lon);
+              acc.maxLon = Math.max(acc.maxLon, lon);
+              return acc;
+            }, {
+              minLat: res.path[0][0],
+              maxLat: res.path[0][0],
+              minLon: res.path[0][1],
+              maxLon: res.path[0][1],
+            });
+
+            mapRef.current?.fitBounds(
+              [[bounds.minLon, bounds.minLat], [bounds.maxLon, bounds.maxLat]],
+              { padding: 80, duration: 2000, maxZoom: 16 }
+            );
+          } else {
+            mapRef.current?.flyTo({
+              center: [res.lon, res.lat],
+              zoom: 15,
+              bearing: res.heading || 0,
+              essential: true,
+              duration: 2000,
+            });
+          }
         }
       } catch (err) {
         setError('Connection lost. The session may have ended.');
@@ -88,16 +113,20 @@ export function TrackingPage() {
           mapStyle={mapStyle}
           style={{ width: '100%', height: '100%' }}
         >
+          {pathGeoJSON && (
+            <Source id="tracking-path" type="geojson" data={pathGeoJSON}>
+              <Layer id="tracking-path-glow" type="line" paint={{ 'line-color': '#22c55e', 'line-width': 20, 'line-opacity': 0.24, 'line-blur': 14 }} />
+              <Layer id="tracking-path-line" type="line" layout={{ 'line-join': 'round', 'line-cap': 'round' }} paint={{ 'line-color': '#34d399', 'line-width': 8, 'line-opacity': 0.95 }} />
+            </Source>
+          )}
           <Marker longitude={data.lon} latitude={data.lat}>
-            <div className="vehicle-marker relative w-12 h-12 flex items-center justify-center">
-              <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping"></div>
-              <div
-                className="w-10 h-10 bg-primary border-4 border-white rounded-full shadow-glow z-10 flex items-center justify-center transition-transform duration-500"
-                style={{ transform: `rotate(${data.heading || 0}deg)` }}
-              >
-                <Navigation className="w-5 h-5 text-white fill-current" />
-              </div>
-            </div>
+            <MapCarIcon
+              iconId={activeMapIconId}
+              heading={data.heading || 0}
+              size={78}
+              animated
+              showPulse
+            />
           </Marker>
         </Map>
         <div className="absolute top-6 left-6 z-[1000] p-6 bg-zinc-950/90 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl hidden md:block w-80">
@@ -109,6 +138,20 @@ export function TrackingPage() {
               <div>
                 <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">Speed</div>
                 <div className="text-xl font-bold">{Math.round(data.speed * 3.6)} km/h</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl">
+              <Route className="w-6 h-6 text-primary" />
+              <div>
+                <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">Distance</div>
+                <div className="text-xl font-bold">{formatDriveDistance(data.distanceKm, 'kph')} / {formatDriveDistance(data.distanceKm, 'mph')}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl">
+              <Timer className="w-6 h-6 text-primary" />
+              <div>
+                <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">Duration</div>
+                <div className="text-xl font-bold">{formatDriveDuration(data.durationMs)}</div>
               </div>
             </div>
             <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl">

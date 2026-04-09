@@ -1,6 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useOSStore } from '@/store/use-os-store';
+import { getWidgetSkinById } from '@/lib/cosmetic-market';
 
 interface BatteryFlowProps {
   level: number;
@@ -12,17 +14,65 @@ interface BatteryFlowProps {
 export function BatteryFlow({ level, charging, compact, orientation = 'vertical' }: BatteryFlowProps) {
   const clamped = Math.max(0, Math.min(100, level));
   const horizontal = orientation === 'horizontal';
-  const fillColor = charging
+  const activeWidgetSkinId = useOSStore(s => s.activeWidgetSkinId);
+  const activeWidgetSkin = getWidgetSkinById(activeWidgetSkinId) ?? getWidgetSkinById('widget-core-digital');
+
+  const frameClassName = activeWidgetSkin?.style === 'retro'
+    ? 'border-amber-300/80 bg-amber-950/35'
+    : activeWidgetSkin?.style === 'motorsport'
+      ? 'border-rose-300/80 bg-zinc-950/75'
+      : activeWidgetSkin?.style === 'luxury'
+        ? 'border-amber-100/55 bg-zinc-950/80'
+        : activeWidgetSkin?.style === 'cyber'
+          ? 'border-emerald-300/65 bg-emerald-950/25'
+          : activeWidgetSkin?.style === 'expedition'
+            ? 'border-lime-200/70 bg-lime-950/20'
+            : 'border-white/70 bg-black/40';
+
+  const terminalClassName = activeWidgetSkin?.style === 'retro'
+    ? 'border-amber-200/70 bg-amber-100/20'
+    : activeWidgetSkin?.style === 'motorsport'
+      ? 'border-rose-200/70 bg-rose-100/20'
+      : activeWidgetSkin?.style === 'luxury'
+        ? 'border-amber-50/50 bg-white/15'
+        : activeWidgetSkin?.style === 'cyber'
+          ? 'border-emerald-200/60 bg-emerald-100/15'
+          : activeWidgetSkin?.style === 'expedition'
+            ? 'border-lime-100/60 bg-lime-100/15'
+            : 'border-white/60 bg-white/20';
+
+  const fillGradient = charging
     ? 'from-emerald-300/90 via-emerald-400/90 to-emerald-500/90'
     : clamped < 20
       ? 'from-rose-300/90 via-rose-400/90 to-rose-500/90'
-      : 'from-cyan-300/90 via-sky-400/90 to-blue-500/90';
+      : activeWidgetSkin?.style === 'retro'
+        ? 'from-amber-200/90 via-amber-400/90 to-orange-500/90'
+        : activeWidgetSkin?.style === 'motorsport'
+          ? 'from-rose-200/90 via-rose-400/90 to-red-500/90'
+          : activeWidgetSkin?.style === 'luxury'
+            ? 'from-stone-100/90 via-amber-100/85 to-amber-300/85'
+            : activeWidgetSkin?.style === 'cyber'
+              ? 'from-emerald-200/90 via-cyan-300/90 to-sky-400/90'
+              : activeWidgetSkin?.style === 'expedition'
+                ? 'from-lime-200/90 via-emerald-300/90 to-teal-400/90'
+                : 'from-cyan-300/90 via-sky-400/90 to-blue-500/90';
+
+  const labelClassName = activeWidgetSkin?.style === 'retro'
+    ? 'font-mono text-amber-200 tracking-[0.14em]'
+    : activeWidgetSkin?.style === 'luxury'
+      ? 'font-serif text-amber-50'
+      : activeWidgetSkin?.style === 'cyber'
+        ? 'font-mono text-emerald-200 tracking-[0.14em]'
+        : activeWidgetSkin?.style === 'expedition'
+          ? 'font-mono text-lime-100 tracking-[0.12em]'
+          : 'text-white';
 
   return (
     <div className={cn('flex items-center', horizontal ? 'gap-1.5' : 'flex-col gap-1')}>
       <div
         className={cn(
-          'relative rounded-md border-2 border-white/70 bg-black/40 overflow-hidden',
+          'relative overflow-hidden rounded-md border-2',
+          frameClassName,
           horizontal
             ? compact
               ? 'w-10 h-6'
@@ -34,7 +84,8 @@ export function BatteryFlow({ level, charging, compact, orientation = 'vertical'
       >
         <div
           className={cn(
-            'absolute rounded-sm border border-white/60 bg-white/20',
+            'absolute rounded-sm border',
+            terminalClassName,
             horizontal
               ? compact
                 ? '-right-1 top-1/2 -translate-y-1/2 w-1 h-2'
@@ -48,6 +99,7 @@ export function BatteryFlow({ level, charging, compact, orientation = 'vertical'
         <motion.div
           className={cn(
             'absolute',
+            fillGradient,
             horizontal ? 'inset-y-0 left-0 bg-gradient-to-r' : 'inset-x-0 bottom-0 bg-gradient-to-t'
           )}
           animate={horizontal ? { width: `${clamped}%` } : { height: `${clamped}%` }}
@@ -63,7 +115,7 @@ export function BatteryFlow({ level, charging, compact, orientation = 'vertical'
           />
         </motion.div>
       </div>
-      <span className={cn('font-black tabular-nums leading-none', compact ? 'text-[9px]' : 'text-[11px]')}>{clamped}%</span>
+      <span className={cn('font-black tabular-nums leading-none', compact ? 'text-[9px]' : 'text-[11px]', labelClassName)}>{clamped}%</span>
     </div>
   );
 }

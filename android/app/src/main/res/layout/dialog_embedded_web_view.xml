@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/embedded_web_view_surface"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/embedded_web_view_surface"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#FF0B1020"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="18dp"
+        android:paddingVertical="14dp">
+
+        <TextView
+            android:id="@+id/embedded_web_view_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Embedded Preview"
+            android:textColor="#FFFFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/embedded_web_view_fullscreen_toggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/embedded_web_view_toolbar_button"
+            android:minHeight="0dp"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="10dp"
+            android:text="Full screen"
+            android:textAllCaps="false"
+            android:textColor="#FFE5F3FF" />
+
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/embedded_web_view_close"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/embedded_web_view_toolbar_button"
+            android:minHeight="0dp"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="10dp"
+            android:text="Close"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFFFF" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <WebView
+            android:id="@+id/embedded_web_view_content"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#FF05070D" />
+
+        <ProgressBar
+            android:id="@+id/embedded_web_view_progress"
+            style="?android:attr/progressBarStyleLarge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center" />
+    </FrameLayout>
+</LinearLayout>

@@ -7,7 +7,7 @@ export interface AiVoicePreferences {
   voiceLang: string;
   rate: number;
   pitch: number;
-  volume: number;
+  volume: number; 
 }
 
 type AiVoiceSettingsSource = Pick<

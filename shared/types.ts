@@ -37,12 +37,19 @@ export interface SavedLocation {
   category: LocationCategory;
   lastUsedAt?: number;
 }
+
+export type TrackingBreadcrumb = [lat: number, lon: number, timestamp: number];
+
 export interface TrackingState {
   lat: number;
   lon: number;
   speed: number;
   heading: number;
   lastUpdate: number;
+  startedAt: number;
+  durationMs: number;
+  distanceKm: number;
+  path: TrackingBreadcrumb[];
 }
 export interface Chat {
   id: string;

@@ -17,6 +17,7 @@ public class MainActivity extends BridgeActivity {
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
+		registerPlugin(EmbeddedWebViewPlugin.class);
 		registerPlugin(NativeMonitorPlugin.class);
 		super.onCreate(savedInstanceState);
 		ensureRuntimePermissions();
