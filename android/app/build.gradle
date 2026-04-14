@@ -1,8 +1,39 @@
 apply plugin: 'com.android.application'
 
+def releaseSigningProperties = new Properties()
+def releaseSigningFile = rootProject.file('signing.properties')
+if (releaseSigningFile.exists()) {
+    releaseSigningFile.withInputStream { stream ->
+        releaseSigningProperties.load(stream)
+    }
+}
+
+def resolveSigningValue = { String propertyName, String envName ->
+    def propertyValue = releaseSigningProperties.getProperty(propertyName)
+    return propertyValue ?: System.getenv(envName)
+}
+
+def releaseStoreFilePath = resolveSigningValue('storeFile', 'VELOCITYOS_RELEASE_STORE_FILE')
+def releaseStorePassword = resolveSigningValue('storePassword', 'VELOCITYOS_RELEASE_STORE_PASSWORD')
+def releaseKeyAlias = resolveSigningValue('keyAlias', 'VELOCITYOS_RELEASE_KEY_ALIAS')
+def releaseKeyPassword = resolveSigningValue('keyPassword', 'VELOCITYOS_RELEASE_KEY_PASSWORD')
+def hasReleaseSigning = [releaseStoreFilePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword].every { it }
+
 android {
     namespace = "com.velocityos.dashboard"
     compileSdk = rootProject.ext.compileSdkVersion
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile rootProject.file(releaseStoreFilePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+                enableV1Signing true
+                enableV2Signing true
+            }
+        }
+    }
     defaultConfig {
         applicationId "com.velocityos.dashboard"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -18,10 +49,17 @@ android {
     }
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+}
+
+if (!hasReleaseSigning) {
+    logger.lifecycle('Release signing is not configured. Add android/signing.properties or set VELOCITYOS_RELEASE_* environment variables to create signed release builds.')
 }
 
 repositories {

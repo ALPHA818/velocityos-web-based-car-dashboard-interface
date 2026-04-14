@@ -82,8 +82,8 @@ public class EmbeddedWebViewPlugin extends Plugin {
             return;
         }
 
-        int x = Math.max(0, Math.round(call.getDouble("x", 0D).floatValue()));
-        int y = Math.max(0, Math.round(call.getDouble("y", 0D).floatValue()));
+        int x = Math.round(call.getDouble("x", 0D).floatValue());
+        int y = Math.round(call.getDouble("y", 0D).floatValue());
         int width = Math.round(call.getDouble("width", 0D).floatValue());
         int height = Math.round(call.getDouble("height", 0D).floatValue());
 

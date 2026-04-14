@@ -20,18 +20,11 @@ export function useNavigationMapShellState() {
   return useOSStore(useShallow((state) => ({
     isMapOpen: state.isMapOpen,
     isFollowing: state.isFollowing,
-    activeDestination: state.activeDestination,
-    activeRoute: state.activeRoute,
     currentPos: state.currentPos,
     currentHeading: state.currentHeading,
-    routeState: state.routeState,
-    routeFailureKind: state.routeFailureKind,
-    routeFailureMessage: state.routeFailureMessage,
-    lastGpsFixAt: state.lastGpsFixAt,
     openMap: state.openMap,
     closeMap: state.closeMap,
     setFollowing: state.setFollowing,
-    setSearchOverlay: state.setSearchOverlay,
   })));
 }
 
@@ -82,9 +75,7 @@ export function useLiveTrackingState() {
 export function useDriveSessionState() {
   return useOSStore(useShallow((state) => ({
     trips: state.trips,
-    currentSpeed: state.currentSpeed,
     units: state.settings.units,
-    activeDestination: state.activeDestination,
     selectedDiscoveredPlace: state.selectedDiscoveredPlace,
   })));
 }

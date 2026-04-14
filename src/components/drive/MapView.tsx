@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import Map, { Source, Layer, Marker, type MapRef } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { useShallow } from 'zustand/react/shallow';
 import { useOSStore } from '@/store/use-os-store';
 import { getCategoryColor, getMapStyle, getMapFilter } from '@/lib/nav-utils';
 import type { GeoJSON } from 'geojson';
@@ -15,9 +16,9 @@ import { useIsLandscapeMobile } from '@/hooks/use-landscape-mobile';
 import { MapCarIcon } from './MapCarIcon';
 import { formatDriveDistance, formatDriveDuration, getLiveDriveTrip, getPathGeoJson, getTripDurationMs } from '@/lib/live-drive';
 import { formatRouteDistance, formatRouteMinutes, getNavigationAlert } from '@/lib/navigation-status';
-import { closeEmbeddedWebView, isEmbeddedWebViewAvailable, openInlineEmbeddedWebView } from '@/lib/embedded-web-view';
+import { isEmbeddedWebViewAvailable, openEmbeddedWebView } from '@/lib/embedded-web-view';
 import { getGoogleMapsEmbedUrl, getGoogleMapsLink, getGoogleMapsPreviewUrl } from '@/lib/drive-utils';
-import { useDriveSessionState, useLiveTrackingState, useNavigationCollectionsState, useNavigationMapShellState, useNavigationSearchState, useNavigationStatusState } from '@/store/os-domain-hooks';
+import { useDriveSessionState, useNavigationMapShellState } from '@/store/os-domain-hooks';
 
 const MAP_CAMERA_UPDATE_INTERVAL_MS = 550;
 const MAP_CAMERA_TOP_DOWN_UPDATE_INTERVAL_MS = 1000;
@@ -35,20 +36,32 @@ function getHeadingDelta(previous: number | null | undefined, next: number | nul
   return Math.min(rawDelta, 360 - rawDelta);
 }
 
-export function MapView() {
+export const MapView = React.memo(function MapView() {
   const { isMapOpen, closeMap, isFollowing, setFollowing, currentPos, currentHeading } = useNavigationMapShellState();
-  const { gpsStatus, activeRoute, activeDestination, routeState, routeFailureKind, routeFailureMessage, lastGpsFixAt } = useNavigationStatusState();
-  const { isSharingLive } = useLiveTrackingState();
+  const { gpsStatus, activeRoute, activeDestination, routeState, routeFailureKind, routeFailureMessage, lastGpsFixAt } = useOSStore(useShallow((state) => ({
+    gpsStatus: state.gpsStatus,
+    activeRoute: state.activeRoute,
+    activeDestination: state.activeDestination,
+    routeState: state.routeState,
+    routeFailureKind: state.routeFailureKind,
+    routeFailureMessage: state.routeFailureMessage,
+    lastGpsFixAt: state.lastGpsFixAt,
+  })));
+  const isSharingLive = useOSStore((state) => state.isSharingLive);
   const { trips, units } = useDriveSessionState();
-  const mapProvider = useOSStore(s => s.settings.mapProvider);
-  const mapTheme = useOSStore(s => s.settings.mapTheme);
-  const mapPerspective = useOSStore(s => s.settings.mapPerspective);
-  const setMapPerspective = useOSStore(s => s.setMapPerspective);
-  const activeMapIconId = useOSStore(s => s.activeMapIconId);
-  const { locations } = useNavigationCollectionsState();
-  const { setSearchOverlay, selectedDiscoveredPlace: discoveredPlace } = useNavigationSearchState();
+  const { mapProvider, mapTheme, mapPerspective, activeMapIconId } = useOSStore(useShallow((state) => ({
+    mapProvider: state.settings.mapProvider,
+    mapTheme: state.settings.mapTheme,
+    mapPerspective: state.settings.mapPerspective,
+    activeMapIconId: state.activeMapIconId,
+  })));
+  const setMapPerspective = useOSStore((state) => state.setMapPerspective);
+  const locations = useOSStore((state) => state.locations);
+  const { setSearchOverlay, discoveredPlace } = useOSStore(useShallow((state) => ({
+    setSearchOverlay: state.setSearchOverlay,
+    discoveredPlace: state.selectedDiscoveredPlace,
+  })));
   const mapRef = useRef<MapRef | null>(null);
-  const nativePreviewSurfaceRef = useRef<HTMLDivElement | null>(null);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCameraSyncRef = useRef<{
     timestamp: number;
@@ -65,13 +78,10 @@ export function MapView() {
   const actionIconClass = isLandscapeMobile
     ? "w-4 h-4"
     : "w-5 h-5 sm:w-6 sm:h-6 md:w-12 md:h-12";
-  const [showShare, setShowShare] = React.useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [googleMapCenter, setGoogleMapCenter] = useState<[number, number] | null>(currentPos);
-  const [nativePreviewStatus, setNativePreviewStatus] = useState<'idle' | 'opening' | 'opened' | 'failed'>('idle');
-  const nativePreviewUrlRef = useRef<string | null>(null);
-  const nativePreviewRequestSyncRef = useRef<(() => void) | null>(null);
-  const nativePreviewLayoutKeyRef = useRef<string | null>(null);
-  const navigationAlert = getNavigationAlert({
+  const navigationAlert = useMemo(() => getNavigationAlert({
     gpsStatus,
     routeState,
     routeFailureKind,
@@ -79,20 +89,19 @@ export function MapView() {
     lastGpsFixAt,
     activeDestination,
     activeRoute,
-  });
+  }), [gpsStatus, routeState, routeFailureKind, routeFailureMessage, lastGpsFixAt, activeDestination, activeRoute]);
   const liveDriveTrip = useMemo(() => getLiveDriveTrip(trips), [trips]);
   const shouldShowLiveDrive = Boolean(!activeDestination && !discoveredPlace && liveDriveTrip);
   const liveDriveDurationMs = liveDriveTrip ? getTripDurationMs(liveDriveTrip) : 0;
   const useGooglePreview = mapProvider === 'google' && !shouldShowLiveDrive;
-  const useNativeGooglePreview = useGooglePreview && isEmbeddedWebViewAvailable();
-  const useEmbeddedGoogleMap = useGooglePreview && (!useNativeGooglePreview || nativePreviewStatus === 'failed');
+  const canOpenNativeGoogleFullscreen = useGooglePreview && isEmbeddedWebViewAvailable();
   const liveDriveGeoJSON = useMemo((): GeoJSON.Feature<GeoJSON.LineString> | null => {
     if (!shouldShowLiveDrive) return null;
     return getPathGeoJson(liveDriveTrip);
   }, [liveDriveTrip, shouldShowLiveDrive]);
 
   useEffect(() => {
-    if (useEmbeddedGoogleMap) {
+    if (useGooglePreview) {
       return;
     }
 
@@ -138,7 +147,7 @@ export function MapView() {
       position: currentPos,
       heading,
     };
-  }, [currentPos, currentHeading, isFollowing, isMapOpen, mapPerspective, isLandscapeMobile, useEmbeddedGoogleMap]);
+  }, [currentPos, currentHeading, isFollowing, isMapOpen, mapPerspective, isLandscapeMobile, useGooglePreview]);
 
   useEffect(() => {
     if (!isMapOpen || !useGooglePreview) {
@@ -175,9 +184,40 @@ export function MapView() {
   }, []);
 
   useEffect(() => {
+    if (!isMapOpen) {
+      setIsFullscreen(false);
+    }
+  }, [isMapOpen]);
+
+  useEffect(() => {
+    if (!isFullscreen) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsFullscreen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
+  useEffect(() => {
     const map = mapRef.current?.getMap();
     if (map) map.getCanvas().style.filter = getMapFilter(mapTheme);
   }, [mapTheme, isMapOpen]);
+
+  useEffect(() => {
+    if (!isMapOpen || useGooglePreview || !mapRef.current) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => mapRef.current?.resize());
+    return () => window.cancelAnimationFrame(frameId);
+  }, [isFullscreen, isMapOpen, useGooglePreview]);
+
   const handleMapInteraction = () => {
     if (isFollowing) setFollowing(false);
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
@@ -222,6 +262,13 @@ export function MapView() {
     }
     return getGoogleMapsLink(target.lat, target.lon);
   }, [activeDestination, currentPos, discoveredPlace, googleMapCenter]);
+  const googleFullscreenUrl = useMemo(() => {
+    if (activeDestination || discoveredPlace) {
+      return googleDirectionsUrl;
+    }
+
+    return googlePreviewUrl;
+  }, [activeDestination, discoveredPlace, googleDirectionsUrl, googlePreviewUrl]);
   const routeGeoJSON = useMemo((): GeoJSON.Feature<GeoJSON.LineString> | null => {
     if (!activeRoute) return null;
     return {
@@ -230,122 +277,6 @@ export function MapView() {
       geometry: { type: 'LineString', coordinates: activeRoute.coordinates.map(c => [c[1], c[0]]) }
     };
   }, [activeRoute]);
-
-  useEffect(() => {
-    nativePreviewUrlRef.current = googlePreviewUrl;
-  }, [googlePreviewUrl]);
-
-  useEffect(() => {
-    if (!isMapOpen || !useNativeGooglePreview) {
-      nativePreviewRequestSyncRef.current = null;
-      nativePreviewLayoutKeyRef.current = null;
-      nativePreviewUrlRef.current = null;
-      setNativePreviewStatus('idle');
-      void closeEmbeddedWebView();
-      return;
-    }
-
-    let isDisposed = false;
-
-    const syncNativePreview = () => {
-      const surface = nativePreviewSurfaceRef.current;
-      const url = nativePreviewUrlRef.current;
-      if (!surface) {
-        return;
-      }
-
-      if (!url) {
-        return;
-      }
-
-      const bounds = surface.getBoundingClientRect();
-      if (bounds.width < 1 || bounds.height < 1) {
-        return;
-      }
-
-      const scale = window.devicePixelRatio || 1;
-      const x = Math.round(bounds.left * scale);
-      const y = Math.round(bounds.top * scale);
-      const width = Math.round(bounds.width * scale);
-      const height = Math.round(bounds.height * scale);
-      const layoutKey = `${url}|${x}|${y}|${width}|${height}`;
-
-      if (nativePreviewLayoutKeyRef.current === layoutKey) {
-        return;
-      }
-
-      nativePreviewLayoutKeyRef.current = layoutKey;
-
-      setNativePreviewStatus((status) => status === 'opened' ? status : 'opening');
-
-      void openInlineEmbeddedWebView({
-        url,
-        x,
-        y,
-        width,
-        height,
-      }).then((opened) => {
-        if (isDisposed) {
-          return;
-        }
-
-        setNativePreviewStatus(opened ? 'opened' : 'failed');
-        if (!opened) {
-          nativePreviewLayoutKeyRef.current = null;
-          nativePreviewUrlRef.current = null;
-          void closeEmbeddedWebView();
-        }
-      });
-    };
-
-    let frameId: number | null = null;
-    const requestSync = () => {
-      if (frameId !== null) {
-        window.cancelAnimationFrame(frameId);
-      }
-
-      frameId = window.requestAnimationFrame(() => {
-        frameId = null;
-        syncNativePreview();
-      });
-    };
-
-    nativePreviewRequestSyncRef.current = requestSync;
-
-    const resizeObserver = typeof ResizeObserver !== 'undefined' && nativePreviewSurfaceRef.current
-      ? new ResizeObserver(() => requestSync())
-      : null;
-
-    if (nativePreviewSurfaceRef.current && resizeObserver) {
-      resizeObserver.observe(nativePreviewSurfaceRef.current);
-    }
-
-    window.addEventListener('resize', requestSync);
-    window.addEventListener('scroll', requestSync, true);
-    requestSync();
-
-    return () => {
-      isDisposed = true;
-      nativePreviewRequestSyncRef.current = null;
-      nativePreviewLayoutKeyRef.current = null;
-      if (frameId !== null) {
-        window.cancelAnimationFrame(frameId);
-      }
-      resizeObserver?.disconnect();
-      window.removeEventListener('resize', requestSync);
-      window.removeEventListener('scroll', requestSync, true);
-      void closeEmbeddedWebView();
-    };
-  }, [isMapOpen, useNativeGooglePreview]);
-
-  useEffect(() => {
-    if (!isMapOpen || !useNativeGooglePreview || nativePreviewStatus === 'failed') {
-      return;
-    }
-
-    nativePreviewLayoutKeyRef.current = null;
-    nativePreviewRequestSyncRef.current?.();
-  }, [googlePreviewUrl, isMapOpen, nativePreviewStatus, useNativeGooglePreview]);
 
   const locationMarkers = useMemo(() => locations.map((loc) => (
     <Marker key={loc.id} longitude={loc.lon} latitude={loc.lat}>
@@ -359,24 +290,29 @@ export function MapView() {
     </Marker>
   )), [locations, activeDestination?.id]);
 
-  const isNativePreviewVisible = useNativeGooglePreview && nativePreviewStatus !== 'failed';
+  const handleFullscreenToggle = async () => {
+    if (canOpenNativeGoogleFullscreen) {
+      const opened = await openEmbeddedWebView({
+        url: googleFullscreenUrl,
+        title: activeDestination?.label ?? discoveredPlace?.label ?? 'Google Maps',
+        startFullscreen: true,
+      });
+
+      if (opened) {
+        return;
+      }
+    }
+
+    setIsFullscreen((current) => !current);
+  };
 
   if (!isMapOpen) return null;
   return (
-    <div ref={nativePreviewSurfaceRef} className="relative h-full min-h-0 w-full overflow-hidden rounded-[1.5rem] border border-white/10 bg-black overscroll-none shadow-[0_24px_80px_-36px_rgba(0,0,0,0.85)] md:rounded-[2.5rem]">
-      {isNativePreviewVisible ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-black px-6 text-center text-white/70">
-          <div>
-            <div className="text-xs font-black uppercase tracking-[0.24em] text-white/45">Google Maps</div>
-            <div className="mt-3 text-lg font-black text-white">
-              {nativePreviewStatus === 'opening' ? 'Opening embedded map…' : 'Google Maps is running inside this tab.'}
-            </div>
-            <div className="mt-2 max-w-sm text-sm text-white/55">
-              Android uses the native webview here so Google Maps can pan with one finger without opening a separate popup window.
-            </div>
-          </div>
-        </div>
-      ) : useEmbeddedGoogleMap ? (
+    <div className={cn(
+      "relative h-full min-h-0 w-full overflow-hidden border border-white/10 bg-black overscroll-none shadow-[0_24px_80px_-36px_rgba(0,0,0,0.85)]",
+      isFullscreen ? 'fixed inset-0 z-[180] rounded-none border-0 shadow-none' : 'rounded-[1.5rem] md:rounded-[2.5rem]'
+    )}>
+      {useGooglePreview ? (
         <div className="absolute inset-0 bg-black overscroll-none">
           <iframe
             key={googleMapUrl}
@@ -440,8 +376,6 @@ export function MapView() {
           )}
         </Map>
       )}
-      {!isNativePreviewVisible && (
-        <>
       <div className={cn(
         "absolute z-[110] flex justify-between items-start",
         isLandscapeMobile ? "top-2 left-2 right-2" : "top-6 left-6 right-6"
@@ -450,7 +384,7 @@ export function MapView() {
           <Button variant="secondary" size="lg" onClick={closeMap} className={cn(topActionButtonClass, "bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-90 transition-transform")}>
             <X className={actionIconClass} />
           </Button>
-          {useEmbeddedGoogleMap && (
+          {useGooglePreview && (
             <Button
               variant="secondary"
               size="lg"
@@ -460,6 +394,16 @@ export function MapView() {
               <ExternalLink className={actionIconClass} />
             </Button>
           )}
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={() => void handleFullscreenToggle()}
+            className={cn(topActionButtonClass, "bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-90 transition-transform")}
+          >
+            <span className={cn('font-black uppercase tracking-[0.18em]', isLandscapeMobile ? 'text-[8px]' : 'text-[9px] md:text-[11px]')}>
+              {isFullscreen ? 'Exit' : 'Full'}
+            </span>
+          </Button>
           <AnimatePresence mode="wait">
             {(activeDestination || discoveredPlace) ? (
               <motion.div 
@@ -479,7 +423,7 @@ export function MapView() {
                   {navigationAlert?.compactLabel ?? 'Destination pinned'}
                   {activeRoute ? ` • ${formatRouteDistance(activeRoute.distance)} • ${formatRouteMinutes(activeRoute.duration)}` : ''}
                 </span>
-                {useEmbeddedGoogleMap && (
+                {useGooglePreview && (
                   <span className="mt-1 text-[10px] md:text-xs font-bold uppercase tracking-[0.18em] text-white/55">
                     Google preview shows nearby shops and points of interest.
                   </span>
@@ -608,8 +552,6 @@ export function MapView() {
       <PlaceDetails />
       <SearchOverlay />
       {showShare && <TrackingOverlay onClose={() => setShowShare(false)} />}
-        </>
-      )}
     </div>
   );
-}
+});

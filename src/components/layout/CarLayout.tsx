@@ -61,6 +61,7 @@ const LazyLibraryMediaPlayer = lazy(loadLibraryMediaPlayer);
 const GEOLOCATION_UPDATE_INTERVAL_MS = 600;
 const GEOLOCATION_MIN_POSITION_DELTA = 0.00003;
 const GEOLOCATION_MIN_HEADING_DELTA = 8;
+const NAVIGATION_ALERT_REFRESH_MS = 5000;
 
 const SIDEBAR_CLOCK_FORMATTER = new Intl.DateTimeFormat('en-GB', {
   hour: '2-digit',
@@ -115,6 +116,98 @@ const SidebarClock = React.memo(function SidebarClock({ className, compact }: { 
   );
 });
 
+type NavigationAlertInput = Omit<Parameters<typeof getNavigationAlert>[0], 'now'>;
+
+interface NavigationBannerProps extends NavigationAlertInput {
+  isMapOpen: boolean;
+  isLandscapeMobile: boolean;
+  activeScene: ReturnType<typeof getScenePackById>;
+  activeAmbientEffect: ReturnType<typeof getAmbientEffectById>;
+  onAction: (actionHint: 'settings' | 'navigation' | undefined) => void;
+}
+
+const NavigationBanner = React.memo(function NavigationBanner({
+  isMapOpen,
+  isLandscapeMobile,
+  activeScene,
+  activeAmbientEffect,
+  onAction,
+  gpsStatus,
+  routeState,
+  routeFailureKind,
+  routeFailureMessage,
+  lastGpsFixAt,
+  activeDestination,
+  activeRoute,
+}: NavigationBannerProps) {
+  const [navigationNow, setNavigationNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNavigationNow(Date.now()), NAVIGATION_ALERT_REFRESH_MS);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const navigationAlert = useMemo(() => getNavigationAlert({
+    gpsStatus,
+    routeState,
+    routeFailureKind,
+    routeFailureMessage,
+    lastGpsFixAt,
+    activeDestination,
+    activeRoute,
+    now: navigationNow,
+  }), [gpsStatus, routeState, routeFailureKind, routeFailureMessage, lastGpsFixAt, activeDestination, activeRoute, navigationNow]);
+
+  if (isMapOpen || !navigationAlert || (navigationAlert.tone === 'success' && !activeDestination)) {
+    return null;
+  }
+
+  const navigationBannerClassName = navigationAlert.tone === 'destructive'
+    ? 'border-rose-400/40 bg-rose-500/15 text-rose-50'
+    : navigationAlert.tone === 'warning'
+      ? 'border-amber-400/40 bg-amber-500/15 text-amber-50'
+      : navigationAlert.tone === 'success'
+        ? 'border-emerald-400/35 bg-emerald-500/12 text-emerald-50'
+        : 'border-cyan-400/35 bg-cyan-500/12 text-cyan-50';
+
+  return (
+    <div className={cn('pointer-events-auto absolute z-30', isLandscapeMobile ? 'left-2 right-2 top-2' : 'left-4 right-4 top-4')}>
+      <div className={cn('relative overflow-hidden rounded-[1.5rem] border backdrop-blur-2xl', navigationBannerClassName)}>
+        <div className="absolute inset-0 opacity-70" style={{ background: activeScene?.surface }} />
+        <div className="absolute -right-8 top-0 h-24 w-24 rounded-full blur-3xl" style={{ background: activeAmbientEffect?.accent }} />
+        <div className={cn('relative z-10 flex gap-3', isLandscapeMobile ? 'flex-col p-3' : 'items-center justify-between p-4')}>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-white/15 bg-black/25 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em]">
+                {navigationAlert.compactLabel}
+              </span>
+              {activeDestination && (
+                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">{activeDestination.label}</span>
+              )}
+            </div>
+            <div className={cn('mt-2 font-black tracking-tight', isLandscapeMobile ? 'text-sm' : 'text-lg')}>
+              {navigationAlert.title}
+            </div>
+            <div className={cn('mt-1 text-white/75', isLandscapeMobile ? 'text-[11px]' : 'text-sm')}>
+              {navigationAlert.detail}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onAction(navigationAlert.actionHint)}
+            className={cn(
+              'shrink-0 rounded-full border border-white/20 bg-black/25 font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-black/35',
+              isLandscapeMobile ? 'px-3 py-2 text-[10px]' : 'px-4 py-3 text-[11px]'
+            )}
+          >
+            {navigationAlert.actionHint === 'settings' ? 'Open Settings' : 'Open Navigation'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export function CarLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -165,7 +258,6 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const track = isLibrarySource ? getTrack(currentTrackIndex) : null;
   const hasCurrentPos = currentPos !== null;
   const [showMicStatusPopup, setShowMicStatusPopup] = useState(false);
-  const [navigationNow, setNavigationNow] = useState(() => Date.now());
   const [nativeMonitorConfig, setNativeMonitorConfigState] = useState<NativeMonitorConfig | null>(null);
   const trackIntervalRef = useRef<number | null>(null);
   const lastAutoOpenedDriveRef = useRef<number | null>(null);
@@ -204,26 +296,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const liveDriveTrip = useMemo(() => getLiveDriveTrip(trips), [trips]);
   const isParked = !currentSpeed || currentSpeed < 0.8;
   const shouldShowIdlePanel = !isMapOpen && (battery.charging || isParked) && ['/', '/media', '/settings', '/trips'].includes(location.pathname);
-  const navigationAlert = useMemo(() => getNavigationAlert({
-    gpsStatus,
-    routeState,
-    routeFailureKind,
-    routeFailureMessage,
-    lastGpsFixAt,
-    activeDestination,
-    activeRoute,
-    now: navigationNow,
-  }), [gpsStatus, routeState, routeFailureKind, routeFailureMessage, lastGpsFixAt, activeDestination, activeRoute, navigationNow]);
-  const showNavigationBanner = !isMapOpen && Boolean(navigationAlert && (navigationAlert.tone !== 'success' || activeDestination));
   const shouldShowParkedDemo = isParkedDemoOpen && isParked && !isMapOpen;
-
-  const navigationBannerClassName = navigationAlert?.tone === 'destructive'
-    ? 'border-rose-400/40 bg-rose-500/15 text-rose-50'
-    : navigationAlert?.tone === 'warning'
-      ? 'border-amber-400/40 bg-amber-500/15 text-amber-50'
-      : navigationAlert?.tone === 'success'
-        ? 'border-emerald-400/35 bg-emerald-500/12 text-emerald-50'
-        : 'border-cyan-400/35 bg-cyan-500/12 text-cyan-50';
 
   const idleStateTitle = battery.charging
     ? 'Charging Scene'
@@ -395,11 +468,6 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => setNavigationNow(Date.now()), 5000);
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  useEffect(() => {
     let active = true;
 
     void getNativeMonitorConfig()
@@ -428,18 +496,10 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
     };
   }, [trackingId, currentPos, currentSpeed, currentHeading]);
 
-  const handleNavigationAlertAction = useCallback(() => {
-    if (!navigationAlert) return;
-
-    if (navigationAlert.actionHint === 'settings') {
-      closeMap();
-      navigate('/settings');
-      return;
-    }
-
+  const handleNavigationBannerAction = useCallback((actionHint: 'settings' | 'navigation' | undefined) => {
     closeMap();
-    navigate('/navigation');
-  }, [closeMap, navigate, navigationAlert]);
+    navigate(actionHint === 'settings' ? '/settings' : '/navigation');
+  }, [closeMap, navigate]);
 
   useEffect(() => {
     if (
@@ -631,42 +691,20 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
           parked={!isMapOpen && isParked}
           showIdleLabel={!isMapOpen}
         />
-        {showNavigationBanner && navigationAlert && (
-          <div className={cn('pointer-events-auto absolute z-30', isLandscapeMobile ? 'left-2 right-2 top-2' : 'left-4 right-4 top-4')}>
-            <div className={cn('relative overflow-hidden rounded-[1.5rem] border backdrop-blur-2xl', navigationBannerClassName)}>
-              <div className="absolute inset-0 opacity-70" style={{ background: activeScene?.surface }} />
-              <div className="absolute -right-8 top-0 h-24 w-24 rounded-full blur-3xl" style={{ background: activeAmbientEffect?.accent }} />
-              <div className={cn('relative z-10 flex gap-3', isLandscapeMobile ? 'flex-col p-3' : 'items-center justify-between p-4')}>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border border-white/15 bg-black/25 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em]">
-                      {navigationAlert.compactLabel}
-                    </span>
-                    {activeDestination && (
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">{activeDestination.label}</span>
-                    )}
-                  </div>
-                  <div className={cn('mt-2 font-black tracking-tight', isLandscapeMobile ? 'text-sm' : 'text-lg')}>
-                    {navigationAlert.title}
-                  </div>
-                  <div className={cn('mt-1 text-white/75', isLandscapeMobile ? 'text-[11px]' : 'text-sm')}>
-                    {navigationAlert.detail}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleNavigationAlertAction}
-                  className={cn(
-                    'shrink-0 rounded-full border border-white/20 bg-black/25 font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-black/35',
-                    isLandscapeMobile ? 'px-3 py-2 text-[10px]' : 'px-4 py-3 text-[11px]'
-                  )}
-                >
-                  {navigationAlert.actionHint === 'settings' ? 'Open Settings' : 'Open Navigation'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <NavigationBanner
+          isMapOpen={isMapOpen}
+          isLandscapeMobile={isLandscapeMobile}
+          gpsStatus={gpsStatus}
+          routeState={routeState}
+          routeFailureKind={routeFailureKind}
+          routeFailureMessage={routeFailureMessage}
+          lastGpsFixAt={lastGpsFixAt}
+          activeDestination={activeDestination}
+          activeRoute={activeRoute}
+          activeScene={activeScene}
+          activeAmbientEffect={activeAmbientEffect}
+          onAction={handleNavigationBannerAction}
+        />
         {shouldShowIdlePanel && (
           <div className={cn('pointer-events-none absolute z-20', isLandscapeMobile ? 'bottom-2 right-2 max-w-[11.5rem]' : 'bottom-4 right-4 max-w-[20rem]')}>
             <div

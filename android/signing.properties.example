@@ -1,0 +1,5 @@
+# Copy this file to android/signing.properties or export matching VELOCITYOS_RELEASE_* environment variables.
+storeFile=keystore/velocityos-upload.jks
+storePassword=replace-me
+keyAlias=velocityosupload
+keyPassword=replace-me
