@@ -1,6 +1,6 @@
-import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { CarLayout } from '@/components/layout/CarLayout';
-import { MapPin, Home, Briefcase, Star, Plus, Compass, Clock, Trash2, Search } from 'lucide-react';
+import { MapPin, Home, Briefcase, Star, Plus, Clock, Trash2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -17,7 +17,7 @@ import { useIsLandscapeMobile } from '@/hooks/use-landscape-mobile';
 import { useNetworkStatus } from '@/hooks/use-network-status';
 import { formatRouteDistance, formatRouteMinutes, getNavigationAlert } from '@/lib/navigation-status';
 import { SystemStatePanel } from '@/components/system/SystemStatePanel';
-import { useNavigationCollectionsState, useNavigationMapShellState, useNavigationStatusState } from '@/store/os-domain-hooks';
+import { useNavigationCollectionsState, useNavigationStatusState } from '@/store/os-domain-hooks';
 
 interface LocationFormState {
   label: string;
@@ -36,15 +36,11 @@ const CATEGORY_ICONS = {
 
 type QuickSaveCategory = Exclude<LocationCategory, 'recent'>;
 
-const LazyMapView = lazy(() => import('@/components/drive/MapView').then((module) => ({ default: module.MapView })));
-
 export function NavigationHub() {
   const { locations, recentLocations, fetchLocations, fetchRecentLocations, addLocation, saveCurrentLocation, promoteRecentLocation, clearHistory, openMap, setSearchOverlay } = useNavigationCollectionsState();
-  const { isMapOpen, closeMap } = useNavigationMapShellState();
   const { gpsStatus, currentPos, activeDestination, activeRoute, routeState, routeFailureKind, routeFailureMessage, lastGpsFixAt } = useNavigationStatusState();
   const isLandscapeMobile = useIsLandscapeMobile();
   const network = useNetworkStatus({ offlineGraceMs: 3000 });
-  const mapSectionRef = useRef<HTMLElement | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [statusNow, setStatusNow] = useState(() => Date.now());
   const [formData, setFormData] = useState<LocationFormState>({
@@ -83,13 +79,6 @@ export function NavigationHub() {
     return () => window.clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    if (!isMapOpen) {
-      return;
-    }
-
-    mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [isMapOpen]);
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const lat = parseFloat(formData.lat);
@@ -302,67 +291,6 @@ export function NavigationHub() {
             </DialogContent>
           </Dialog>
         </header>
-        <section ref={mapSectionRef} className="dashboard-card overflow-hidden border border-white/10 bg-zinc-950/45">
-          <div className={cn(
-            'flex items-center justify-between border-b border-white/10 bg-black/20',
-            isLandscapeMobile ? 'px-3 py-3' : 'px-5 py-4'
-          )}>
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-primary/70">Map tab</div>
-              <h2 className={cn('mt-2 font-black tracking-tight', isLandscapeMobile ? 'text-xl' : 'text-3xl')}>
-                {isMapOpen ? (activeDestination?.label ?? 'Live map view') : 'Open the embedded map'}
-              </h2>
-              <p className={cn('mt-2 text-muted-foreground', isLandscapeMobile ? 'text-[11px]' : 'text-sm')}>
-                {isMapOpen
-                  ? 'The map stays inside Navigation so the rest of the tab remains visible.'
-                  : 'Launch the map here to keep search, route status, and saved destinations visible around it.'}
-              </p>
-            </div>
-            {isMapOpen ? (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={closeMap}
-                className={cn(
-                  'whitespace-nowrap font-black',
-                  isLandscapeMobile ? 'h-11 gap-2 rounded-xl px-4 text-sm' : 'h-14 gap-3 rounded-2xl px-6 text-base'
-                )}
-              >
-                <MapPin className={cn(isLandscapeMobile ? 'h-4 w-4' : 'h-5 w-5')} /> Close Map
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                onClick={() => openMap()}
-                className={cn(
-                  'whitespace-nowrap font-black shadow-glow',
-                  isLandscapeMobile ? 'h-11 gap-2 rounded-xl px-4 text-sm' : 'h-14 gap-3 rounded-2xl px-6 text-base'
-                )}
-              >
-                <Compass className={cn(isLandscapeMobile ? 'h-4 w-4' : 'h-5 w-5')} /> Open Map
-              </Button>
-            )}
-          </div>
-          <div className={cn(isLandscapeMobile ? 'h-[18rem]' : 'h-[28rem] lg:h-[34rem]')}>
-            {isMapOpen ? (
-              <Suspense fallback={null}>
-                <LazyMapView />
-              </Suspense>
-            ) : (
-              <div className="flex h-full items-center justify-center px-6 text-center text-muted-foreground">
-                <div className="max-w-xl">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">Ready</div>
-                  <div className={cn('mt-3 font-black tracking-tight text-white', isLandscapeMobile ? 'text-xl' : 'text-3xl')}>
-                    The map opens inside this tab
-                  </div>
-                  <p className={cn('mt-3', isLandscapeMobile ? 'text-[11px]' : 'text-sm')}>
-                    Saved places, search tools, and route cards stay on screen while the map runs in this section.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
         <section className={cn('grid', isLandscapeMobile ? 'grid-cols-1 gap-3' : 'md:grid-cols-12 gap-4')}>
           <div className={cn('dashboard-card border md:col-span-7', statusCardClassName)}>
             <div className={cn('flex h-full flex-col justify-between', isLandscapeMobile ? 'gap-3 p-3' : 'gap-4 p-5')}>
@@ -399,7 +327,7 @@ export function NavigationHub() {
                   {activeDestination?.label ?? 'No destination armed'}
                 </h2>
                 <p className={cn('mt-2 text-muted-foreground', isLandscapeMobile ? 'text-[11px]' : 'text-sm')}>
-                  {activeDestination ? 'Open the map to continue turn-by-turn guidance or refresh the route state.' : 'Use search or tap a saved card below to move into map mode immediately.'}
+                  {activeDestination ? 'Open the Map tab to continue turn-by-turn guidance or refresh the route state.' : 'Use search or tap a saved card below to move into the Map tab immediately.'}
                 </p>
               </div>
               <div className={cn('grid', isLandscapeMobile ? 'grid-cols-2 gap-2' : 'grid-cols-2 gap-3')}>

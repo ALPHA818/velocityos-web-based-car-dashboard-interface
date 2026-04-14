@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import '@/index.css'
 import { enableMapSet } from 'immer';
+import { Capacitor } from '@capacitor/core';
 import { StrictMode, Suspense, lazy, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
@@ -47,6 +48,16 @@ function warmRouteModules() {
     loadTripsPage(),
     loadThemeStorePage(),
   ]);
+}
+
+function shouldWarmRoutes() {
+  if (typeof window === 'undefined') return false;
+
+  const coarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  const networkState = navigator as Navigator & { connection?: { saveData?: boolean } };
+  const prefersSaveData = Boolean(networkState.connection?.saveData);
+
+  return !Capacitor.isNativePlatform() && !coarsePointer && !prefersSaveData;
 }
 
 let lastRouteTelemetry: { routeId: string; timestamp: number } | null = null;
@@ -98,7 +109,7 @@ function withRouteLoader(routeId: string, element: React.ReactElement) {
 
 reportColdStart(typeof window !== 'undefined' ? window.location.pathname : '/');
 
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && shouldWarmRoutes()) {
   const scheduleRouteWarmup = () => {
     if ('requestIdleCallback' in window) {
       window.requestIdleCallback(() => warmRouteModules(), { timeout: 1500 });

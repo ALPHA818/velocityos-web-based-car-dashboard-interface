@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core';
+
 export type AssistantRole = 'user' | 'assistant';
 
 export interface AssistantMessage {
@@ -86,6 +88,62 @@ function buildOllamaMessages(history: AssistantMessage[], prompt: string): Ollam
 function normalizeBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.trim();
   return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
+}
+
+export function isLoopbackOllamaBaseUrl(baseUrl: string): boolean {
+  try {
+    const url = new URL(normalizeBaseUrl(baseUrl));
+    const hostname = url.hostname.toLowerCase();
+    return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1';
+  } catch {
+    return false;
+  }
+}
+
+function isPhoneLikeClient(): boolean {
+  if (typeof window === 'undefined') return false;
+
+  const coarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  return Capacitor.isNativePlatform() || coarsePointer;
+}
+
+export function getOllamaConnectionHint(baseUrl: string): string {
+  if (isLoopbackOllamaBaseUrl(baseUrl) && isPhoneLikeClient()) {
+    return 'This phone cannot reach Ollama at 127.0.0.1 unless Ollama is running on the phone itself. Use the LAN IP of the computer running Ollama instead.';
+  }
+
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  return `Ollama is unavailable at ${normalizedBaseUrl || 'the configured URL'}. Check the server, model, and network path in Settings.`;
+}
+
+export function buildOfflineAssistantReply(prompt: string, baseUrl: string): string {
+  const normalizedPrompt = prompt.trim().toLowerCase();
+
+  if (!normalizedPrompt) {
+    return `Offline assistant mode is active. ${getOllamaConnectionHint(baseUrl)}`;
+  }
+
+  if (/\b(map|maps|navigation|route|destination|bookmark|saved place|recent)\b/.test(normalizedPrompt)) {
+    return 'Offline assistant: open Navigation to manage saved places and recent destinations. Tapping a place opens the Map tab with that location preselected.';
+  }
+
+  if (/\b(media|music|player|spotify|youtube)\b/.test(normalizedPrompt)) {
+    return 'Offline assistant: use the Media tab to switch sources and control playback. The Map tab is separate now, so media changes stay in Media unless you open Map yourself.';
+  }
+
+  if (/\b(settings|voice|microphone|ollama|ai|assistant)\b/.test(normalizedPrompt)) {
+    return `Offline assistant: voice and AI settings live in System Settings. ${getOllamaConnectionHint(baseUrl)}`;
+  }
+
+  if (/\b(trip|trips|drive|live drive|tracking|share)\b/.test(normalizedPrompt)) {
+    return 'Offline assistant: Trips shows recent drive history and progress, while the Map tab can show the active live-drive trail or shared tracking state.';
+  }
+
+  if (/\b(theme|store|skin|ambient|scene)\b/.test(normalizedPrompt)) {
+    return 'Offline assistant: open the Store tab to change themes, map icons, trip cosmetics, scenes, ambient effects, and widget skins.';
+  }
+
+  return `Offline assistant mode is active. I can still help with Navigation, Map, Media, Trips, Settings, and Store. ${getOllamaConnectionHint(baseUrl)}`;
 }
 
 export async function askOllama(options: AskOllamaOptions): Promise<string> {

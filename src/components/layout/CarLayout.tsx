@@ -3,6 +3,7 @@ import { Home, Map, Music, Grid, Settings, Wifi, MapPin, Store, X } from 'lucide
 import { cn } from '@/lib/utils';
 import { requestWakeLock } from '@/lib/drive-utils';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useShallow } from 'zustand/react/shallow';
 import { useOSStore } from '@/store/use-os-store';
 import { useMediaStore, getTrack, isLibraryMediaSource } from '@/store/use-media-store';
 import { BatteryFlow } from '@/components/layout/BatteryFlow';
@@ -14,13 +15,12 @@ import { useNetworkStatus } from '@/hooks/use-network-status';
 import { useWeatherSnapshot } from '@/hooks/use-weather-snapshot';
 import { applyMarketTheme, getThemeById } from '@/lib/theme-market';
 import { getAmbientEffectById, getScenePackById, getWidgetSkinById } from '@/lib/cosmetic-market';
-import { getLiveDriveTrip } from '@/lib/live-drive';
 import { getNavigationAlert } from '@/lib/navigation-status';
 import { getNativeMonitorConfig, type NativeMonitorConfig } from '@/lib/native-monitor';
 import { useWakeWordNavigation } from '@/hooks/use-wake-word-navigation';
 import { ParkedModeOnboarding } from '@/components/system/ParkedModeOnboarding';
 import { SystemStatusHub } from '@/components/system/SystemStatusHub';
-import { useDriveSessionState, useLiveTrackingState, useNavigationMapShellState, useNavigationStatusState, useParkedDemoState } from '@/store/os-domain-hooks';
+import { useLiveTrackingState, useNavigationMapShellState, useParkedDemoState } from '@/store/os-domain-hooks';
 interface NavButtonProps {
   icon: React.ElementType;
   isActive?: boolean;
@@ -214,39 +214,72 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const { isMapOpen, openMap, closeMap } = useNavigationMapShellState();
   const {
     gpsStatus,
-    currentPos,
-    currentSpeed,
-    currentHeading,
     activeDestination,
     activeRoute,
     routeState,
     routeFailureKind,
     routeFailureMessage,
     lastGpsFixAt,
-  } = useNavigationStatusState();
+    setCurrentPos,
+    setGpsStatus,
+    selectedDiscoveredPlace,
+    autoTheme,
+    activeThemeId,
+    activeScenePackId,
+    activeAmbientEffectId,
+    activeWidgetSkinId,
+    aiName,
+    aiVoiceControlEnabled,
+    ollamaBaseUrl,
+    ollamaModel,
+    updateSettings,
+    isParked,
+    hasCurrentPos,
+  } = useOSStore(useShallow((state) => ({
+    gpsStatus: state.gpsStatus,
+    activeDestination: state.activeDestination,
+    activeRoute: state.activeRoute,
+    routeState: state.routeState,
+    routeFailureKind: state.routeFailureKind,
+    routeFailureMessage: state.routeFailureMessage,
+    lastGpsFixAt: state.lastGpsFixAt,
+    setCurrentPos: state.setCurrentPos,
+    setGpsStatus: state.setGpsStatus,
+    selectedDiscoveredPlace: state.selectedDiscoveredPlace,
+    autoTheme: state.settings.autoTheme,
+    activeThemeId: state.activeThemeId,
+    activeScenePackId: state.activeScenePackId,
+    activeAmbientEffectId: state.activeAmbientEffectId,
+    activeWidgetSkinId: state.activeWidgetSkinId,
+    aiName: state.settings.aiName,
+    aiVoiceControlEnabled: state.settings.aiVoiceControlEnabled,
+    ollamaBaseUrl: state.settings.ollamaBaseUrl,
+    ollamaModel: state.settings.ollamaModel,
+    updateSettings: state.updateSettings,
+    isParked: !state.currentSpeed || state.currentSpeed < 0.8,
+    hasCurrentPos: state.currentPos !== null,
+  })));
   const { isSharingLive, trackingId } = useLiveTrackingState();
-  const { trips, selectedDiscoveredPlace } = useDriveSessionState();
   const { isParkedDemoOpen, dismissParkedDemo, completeParkedDemo } = useParkedDemoState();
-  const setCurrentPos = useOSStore(s => s.setCurrentPos);
-  const setGpsStatus = useOSStore(s => s.setGpsStatus);
-  const autoTheme = useOSStore(s => s.settings.autoTheme);
-  const activeThemeId = useOSStore(s => s.activeThemeId);
-  const activeScenePackId = useOSStore(s => s.activeScenePackId);
-  const activeAmbientEffectId = useOSStore(s => s.activeAmbientEffectId);
-  const activeWidgetSkinId = useOSStore(s => s.activeWidgetSkinId);
-  const aiName = useOSStore(s => s.settings.aiName);
-  const aiVoiceControlEnabled = useOSStore(s => s.settings.aiVoiceControlEnabled);
-  const ollamaBaseUrl = useOSStore(s => s.settings.ollamaBaseUrl);
-  const ollamaModel = useOSStore(s => s.settings.ollamaModel);
-  const updateSettings = useOSStore(s => s.updateSettings);
-  const isPlaying = useMediaStore(s => s.isPlaying);
-  const isPlayerReady = useMediaStore(s => s.isPlayerReady);
-  const setPlayerReady = useMediaStore(s => s.setPlayerReady);
-  const activeSource = useMediaStore(s => s.activeSource);
-  const currentTrackIndex = useMediaStore(s => s.currentTrackIndex);
-  const volume = useMediaStore(s => s.volume);
-  const setProgress = useMediaStore(s => s.setProgress);
-  const setDuration = useMediaStore(s => s.setDuration);
+  const {
+    isPlaying,
+    isPlayerReady,
+    setPlayerReady,
+    activeSource,
+    currentTrackIndex,
+    volume,
+    setProgress,
+    setDuration,
+  } = useMediaStore(useShallow((state) => ({
+    isPlaying: state.isPlaying,
+    isPlayerReady: state.isPlayerReady,
+    setPlayerReady: state.setPlayerReady,
+    activeSource: state.activeSource,
+    currentTrackIndex: state.currentTrackIndex,
+    volume: state.volume,
+    setProgress: state.setProgress,
+    setDuration: state.setDuration,
+  })));
   const isLandscapeMobile = useIsLandscapeMobile();
   const isMobile = useIsMobile();
   const battery = useBatteryStatus();
@@ -256,16 +289,19 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const isCompactSidebarMeta = isLandscapeMobile || isBottomSidebar;
   const isLibrarySource = isLibraryMediaSource(activeSource);
   const track = isLibrarySource ? getTrack(currentTrackIndex) : null;
-  const hasCurrentPos = currentPos !== null;
   const [showMicStatusPopup, setShowMicStatusPopup] = useState(false);
   const [nativeMonitorConfig, setNativeMonitorConfigState] = useState<NativeMonitorConfig | null>(null);
   const trackIntervalRef = useRef<number | null>(null);
-  const lastAutoOpenedDriveRef = useRef<number | null>(null);
-  const trackingSnapshotRef = useRef({
+  const trackingSnapshotRef = useRef<{
+    trackingId: string | null;
+    currentPos: [number, number] | null;
+    currentSpeed: number | null;
+    currentHeading: number | null;
+  }>({
     trackingId,
-    currentPos,
-    currentSpeed,
-    currentHeading,
+    currentPos: null,
+    currentSpeed: null,
+    currentHeading: null,
   });
   const lastThemeUpdateRef = useRef<number>(-1);
   const lastGeolocationCommitRef = useRef<{
@@ -293,8 +329,6 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
     () => getWidgetSkinById(activeWidgetSkinId) ?? getWidgetSkinById('widget-core-digital'),
     [activeWidgetSkinId]
   );
-  const liveDriveTrip = useMemo(() => getLiveDriveTrip(trips), [trips]);
-  const isParked = !currentSpeed || currentSpeed < 0.8;
   const shouldShowIdlePanel = !isMapOpen && (battery.charging || isParked) && ['/', '/media', '/settings', '/trips'].includes(location.pathname);
   const shouldShowParkedDemo = isParkedDemoOpen && isParked && !isMapOpen;
 
@@ -333,10 +367,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
 
   const openMapOverlay = useCallback(() => {
     openMap();
-    if (location.pathname !== '/navigation') {
-      navigate('/navigation');
-    }
-  }, [location.pathname, navigate, openMap]);
+  }, [openMap]);
 
   const handleAiVoiceFallback = useCallback(async (command: string) => {
     try {
@@ -443,7 +474,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   }, [activeThemeId]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || isMobile) return;
 
     const warmShellModules = () => {
       void Promise.allSettled([
@@ -465,7 +496,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, []);
+  }, [isMobile]);
 
   useEffect(() => {
     let active = true;
@@ -488,47 +519,27 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    trackingSnapshotRef.current = {
-      trackingId,
-      currentPos,
-      currentSpeed,
-      currentHeading,
+    const syncTrackingSnapshot = () => {
+      const state = useOSStore.getState();
+      trackingSnapshotRef.current = {
+        trackingId: state.trackingId,
+        currentPos: state.currentPos,
+        currentSpeed: state.currentSpeed,
+        currentHeading: state.currentHeading,
+      };
     };
-  }, [trackingId, currentPos, currentSpeed, currentHeading]);
+
+    syncTrackingSnapshot();
+
+    return useOSStore.subscribe(() => {
+      syncTrackingSnapshot();
+    });
+  }, []);
 
   const handleNavigationBannerAction = useCallback((actionHint: 'settings' | 'navigation' | undefined) => {
     closeMap();
     navigate(actionHint === 'settings' ? '/settings' : '/navigation');
   }, [closeMap, navigate]);
-
-  useEffect(() => {
-    if (
-      isMapOpen
-      || !liveDriveTrip
-      || Boolean(liveDriveTrip.endTime)
-      || Boolean(activeDestination)
-      || Boolean(selectedDiscoveredPlace)
-      || !currentSpeed
-      || currentSpeed < 0.8
-    ) {
-      return;
-    }
-
-    if (lastAutoOpenedDriveRef.current === liveDriveTrip.startTime) {
-      return;
-    }
-
-    openMapOverlay();
-    lastAutoOpenedDriveRef.current = liveDriveTrip.startTime;
-  }, [isMapOpen, liveDriveTrip, activeDestination, selectedDiscoveredPlace, currentSpeed, openMapOverlay]);
-
-  useEffect(() => {
-    if (!isMapOpen || location.pathname === '/navigation') {
-      return;
-    }
-
-    navigate('/navigation');
-  }, [isMapOpen, location.pathname, navigate]);
 
   useEffect(() => {
     const clearTrackingInterval = () => {

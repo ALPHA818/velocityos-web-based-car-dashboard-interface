@@ -34,13 +34,23 @@ public class SpeedMonitorService extends Service implements LocationListener {
     private static final int SERVICE_NOTIFICATION_ID = 4101;
     private static final int ALERT_NOTIFICATION_ID = 4102;
 
-    private static final long LOCATION_MIN_TIME_MS = 300L;
-    private static final float LOCATION_MIN_DISTANCE_M = 0f;
+    private static final long GPS_LOCATION_MIN_TIME_MS = 1000L;
+    private static final float GPS_LOCATION_MIN_DISTANCE_M = 5f;
+
+    private static final float MAX_SPEED_LOCATION_ACCURACY_M = 35f;
+    private static final float MAX_SPEED_ACCURACY_MPS = 5f;
+    private static final float MIN_DIRECT_SPEED_MPS = 0.5f;
+    private static final long MIN_DELTA_SAMPLE_MS = 1500L;
+    private static final long MAX_DELTA_SAMPLE_MS = 15000L;
+    private static final float MIN_DELTA_DISTANCE_M = 10f;
+    private static final int REQUIRED_OVERSPEED_SAMPLES = 2;
 
     private LocationManager locationManager;
-    private Location lastLocation;
-    private long lastLocationSampleElapsedMs = 0L;
+    private Location lastSpeedReferenceLocation;
+    private long lastSpeedReferenceElapsedMs = 0L;
     private long lastAlertElapsedMs = 0L;
+    private int consecutiveOverspeedSamples = 0;
+    private boolean thresholdAlertLatched = false;
 
     @Override
     public void onCreate() {
@@ -102,11 +112,26 @@ public class SpeedMonitorService extends Service implements LocationListener {
 
         final long sampleElapsedMs = SystemClock.elapsedRealtime();
         final float speedMps = resolveSpeedMps(location, sampleElapsedMs);
-        lastLocationSampleElapsedMs = sampleElapsedMs;
-        lastLocation = location;
+        updateSpeedReference(location, sampleElapsedMs);
+
+        if (speedMps < 0f) {
+            consecutiveOverspeedSamples = 0;
+            return;
+        }
 
         final float speedKph = speedMps * 3.6f;
         if (speedKph < config.thresholdKph) {
+            consecutiveOverspeedSamples = 0;
+            thresholdAlertLatched = false;
+            return;
+        }
+
+        if (thresholdAlertLatched) {
+            return;
+        }
+
+        consecutiveOverspeedSamples += 1;
+        if (consecutiveOverspeedSamples < REQUIRED_OVERSPEED_SAMPLES) {
             return;
         }
 
@@ -121,30 +146,67 @@ public class SpeedMonitorService extends Service implements LocationListener {
         }
 
         lastAlertElapsedMs = now;
+        thresholdAlertLatched = true;
         Log.i(TAG, "Speed threshold exceeded in background: " + speedKph + " km/h. Triggering launch.");
         launchDashboardForSpeedAlert(speedKph, config);
     }
 
     private float resolveSpeedMps(@NonNull Location current, long sampleElapsedMs) {
-        if (current.hasSpeed() && current.getSpeed() > 0.2f) {
-            return current.getSpeed();
+        if (!isReliableSpeedLocation(current)) {
+            return -1f;
         }
 
-        if (lastLocation == null) {
+        if (current.hasSpeed()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    && current.hasSpeedAccuracy()
+                    && current.getSpeedAccuracyMetersPerSecond() > MAX_SPEED_ACCURACY_MPS) {
+                return -1f;
+            }
+
+            return current.getSpeed() >= MIN_DIRECT_SPEED_MPS ? current.getSpeed() : 0f;
+        }
+
+        if (lastSpeedReferenceLocation == null || !isReliableSpeedLocation(lastSpeedReferenceLocation)) {
+            return -1f;
+        }
+
+        long dtMs = sampleElapsedMs - lastSpeedReferenceElapsedMs;
+        if (dtMs <= 0) {
+            dtMs = current.getTime() - lastSpeedReferenceLocation.getTime();
+        }
+
+        if (dtMs < MIN_DELTA_SAMPLE_MS || dtMs > MAX_DELTA_SAMPLE_MS) {
+            return -1f;
+        }
+
+        final float distanceMeters = lastSpeedReferenceLocation.distanceTo(current);
+        final float accuracyMarginMeters = Math.max(getAccuracyMeters(current), getAccuracyMeters(lastSpeedReferenceLocation));
+        if (distanceMeters <= Math.max(MIN_DELTA_DISTANCE_M, accuracyMarginMeters)) {
             return 0f;
         }
 
-        long dtMs = sampleElapsedMs - lastLocationSampleElapsedMs;
-        if (dtMs <= 0) {
-            dtMs = current.getTime() - lastLocation.getTime();
-        }
-
-        if (dtMs <= 0) {
-            return 0f;
-        }
-
-        final float distanceMeters = lastLocation.distanceTo(current);
         return distanceMeters / (dtMs / 1000f);
+    }
+
+    private void updateSpeedReference(@NonNull Location location, long sampleElapsedMs) {
+        if (!isReliableSpeedLocation(location)) {
+            return;
+        }
+
+        lastSpeedReferenceLocation = new Location(location);
+        lastSpeedReferenceElapsedMs = sampleElapsedMs;
+    }
+
+    private boolean isReliableSpeedLocation(@NonNull Location location) {
+        if (!LocationManager.GPS_PROVIDER.equals(location.getProvider())) {
+            return false;
+        }
+
+        return !location.hasAccuracy() || location.getAccuracy() <= MAX_SPEED_LOCATION_ACCURACY_M;
+    }
+
+    private float getAccuracyMeters(@NonNull Location location) {
+        return location.hasAccuracy() ? location.getAccuracy() : MAX_SPEED_LOCATION_ACCURACY_M;
     }
 
     private void launchDashboardForSpeedAlert(float speedKph, @NonNull MonitorPreferences.Config config) {
@@ -259,17 +321,8 @@ public class SpeedMonitorService extends Service implements LocationListener {
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(
                         LocationManager.GPS_PROVIDER,
-                        LOCATION_MIN_TIME_MS,
-                        LOCATION_MIN_DISTANCE_M,
-                        this
-                );
-            }
-
-            if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                locationManager.requestLocationUpdates(
-                        LocationManager.NETWORK_PROVIDER,
-                        LOCATION_MIN_TIME_MS,
-                        LOCATION_MIN_DISTANCE_M,
+                        GPS_LOCATION_MIN_TIME_MS,
+                        GPS_LOCATION_MIN_DISTANCE_M,
                         this
                 );
             }
@@ -292,8 +345,7 @@ public class SpeedMonitorService extends Service implements LocationListener {
 
     private boolean hasLocationPermission() {
         final int fine = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION);
-        final int coarse = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION);
-        return fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED;
+        return fine == PackageManager.PERMISSION_GRANTED;
     }
 
     private boolean canPostNotifications() {

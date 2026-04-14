@@ -1,4 +1,6 @@
+import { Capacitor } from '@capacitor/core';
 import type { UserSettings } from '@shared/types';
+import { getNativeTtsVoices, isNativeTtsAvailable, speakWithNativeTts, stopNativeTts } from '@/lib/native-tts';
 
 export interface AiVoicePreferences {
   enabled: boolean;
@@ -8,6 +10,14 @@ export interface AiVoicePreferences {
   rate: number;
   pitch: number;
   volume: number; 
+}
+
+export interface AiVoiceProfile {
+  id: string;
+  name: string;
+  lang: string;
+  provider: 'browser' | 'android-native';
+  isDefault: boolean;
 }
 
 type AiVoiceSettingsSource = Pick<
@@ -42,9 +52,26 @@ export function isSpeechSynthesisSupported(): boolean {
   return typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 }
 
+export function primeSpeechVoices(): void {
+  if (!isSpeechSynthesisSupported()) return;
+
+  try {
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.resume();
+  } catch {
+    // Some WebView implementations throw while the speech engine is still booting.
+  }
+}
+
 export function getSpeechVoices(): SpeechSynthesisVoice[] {
   if (!isSpeechSynthesisSupported()) return [];
-  return window.speechSynthesis.getVoices();
+
+  primeSpeechVoices();
+
+  return window.speechSynthesis
+    .getVoices()
+    .slice()
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 function resolveVoice(preferences: AiVoicePreferences, voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
@@ -59,18 +86,76 @@ function resolveVoice(preferences: AiVoicePreferences, voices: SpeechSynthesisVo
   return voices[0] || null;
 }
 
-export function stopAiVoice(): void {
-  if (!isSpeechSynthesisSupported()) return;
-  window.speechSynthesis.cancel();
+function createVoiceProfileId(provider: AiVoiceProfile['provider'], name: string, lang: string, index: number): string {
+  return `${provider}:${name}:${lang}:${index}`;
 }
 
-export function speakWithAiVoice(text: string, preferences: AiVoicePreferences): boolean {
-  const phrase = text.trim();
-  if (!phrase || !preferences.enabled) return false;
+function sortProfiles(profiles: AiVoiceProfile[]): AiVoiceProfile[] {
+  return profiles
+    .slice()
+    .sort((left, right) => {
+      if (left.isDefault !== right.isDefault) {
+        return left.isDefault ? -1 : 1;
+      }
+
+      if (left.provider !== right.provider) {
+        if (Capacitor.getPlatform() === 'android') {
+          return left.provider === 'android-native' ? -1 : 1;
+        }
+
+        return left.provider === 'browser' ? -1 : 1;
+      }
+
+      return left.name.localeCompare(right.name);
+    });
+}
+
+async function getNativeVoiceProfiles(): Promise<AiVoiceProfile[]> {
+  const nativeVoices = await getNativeTtsVoices();
+
+  return nativeVoices.map((voice, index) => ({
+    id: createVoiceProfileId('android-native', voice.name, voice.lang, index),
+    name: voice.name,
+    lang: voice.lang,
+    provider: 'android-native',
+    isDefault: Boolean(voice.isDefault),
+  }));
+}
+
+function getBrowserVoiceProfiles(): AiVoiceProfile[] {
+  return getSpeechVoices().map((voice, index) => ({
+    id: createVoiceProfileId('browser', voice.name, voice.lang, index),
+    name: voice.name,
+    lang: voice.lang,
+    provider: 'browser',
+    isDefault: Boolean(voice.default),
+  }));
+}
+
+export async function getAvailableAiVoiceProfiles(): Promise<AiVoiceProfile[]> {
+  const profiles = [
+    ...(await getNativeVoiceProfiles()),
+    ...getBrowserVoiceProfiles(),
+  ];
+
+  return sortProfiles(
+    profiles.filter((profile, index) => profiles.findIndex((candidate) => candidate.provider === profile.provider && candidate.name === profile.name && candidate.lang === profile.lang) === index)
+  );
+}
+
+export async function isAiVoiceOutputSupported(): Promise<boolean> {
+  if (isSpeechSynthesisSupported()) {
+    return true;
+  }
+
+  return isNativeTtsAvailable();
+}
+
+function speakWithBrowserVoice(text: string, preferences: AiVoicePreferences): boolean {
   if (!isSpeechSynthesisSupported()) return false;
 
   const voices = getSpeechVoices();
-  const utterance = new SpeechSynthesisUtterance(phrase);
+  const utterance = new SpeechSynthesisUtterance(text);
   const selectedVoice = resolveVoice(preferences, voices);
 
   if (selectedVoice) {
@@ -84,7 +169,38 @@ export function speakWithAiVoice(text: string, preferences: AiVoicePreferences):
   utterance.pitch = preferences.pitch;
   utterance.volume = preferences.volume;
 
+  try {
+    window.speechSynthesis.resume();
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function stopAiVoice(): void {
+  stopNativeTts();
+
+  if (!isSpeechSynthesisSupported()) return;
   window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utterance);
-  return true;
+}
+
+export async function speakWithAiVoice(text: string, preferences: AiVoicePreferences): Promise<boolean> {
+  const phrase = text.trim();
+  if (!phrase || !preferences.enabled) return false;
+
+  const spokeNatively = await speakWithNativeTts({
+    text: phrase,
+    voiceName: preferences.voiceName,
+    voiceLang: preferences.voiceLang,
+    rate: preferences.rate,
+    pitch: preferences.pitch,
+    volume: preferences.volume,
+  });
+  if (spokeNatively) {
+    return true;
+  }
+
+  return speakWithBrowserVoice(phrase, preferences);
 }

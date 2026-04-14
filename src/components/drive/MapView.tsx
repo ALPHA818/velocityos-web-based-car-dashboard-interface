@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import Map, { Source, Layer, Marker, type MapRef } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -8,17 +8,18 @@ import { getCategoryColor, getMapStyle, getMapFilter } from '@/lib/nav-utils';
 import type { GeoJSON } from 'geojson';
 import { X, Navigation, Share2, Compass, Globe, Search, ExternalLink, Route, Timer, Gauge } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { TrackingOverlay } from './TrackingOverlay';
-import { SearchOverlay } from './SearchOverlay';
-import { PlaceDetails } from './PlaceDetails';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useIsLandscapeMobile } from '@/hooks/use-landscape-mobile';
-import { MapCarIcon } from './MapCarIcon';
 import { formatDriveDistance, formatDriveDuration, getLiveDriveTrip, getPathGeoJson, getTripDurationMs } from '@/lib/live-drive';
 import { formatRouteDistance, formatRouteMinutes, getNavigationAlert } from '@/lib/navigation-status';
 import { isEmbeddedWebViewAvailable, openEmbeddedWebView } from '@/lib/embedded-web-view';
 import { getGoogleMapsEmbedUrl, getGoogleMapsLink, getGoogleMapsPreviewUrl } from '@/lib/drive-utils';
 import { useDriveSessionState, useNavigationMapShellState } from '@/store/os-domain-hooks';
+
+const TrackingOverlay = lazy(() => import('./TrackingOverlay').then((module) => ({ default: module.TrackingOverlay })));
+const SearchOverlay = lazy(() => import('./SearchOverlay').then((module) => ({ default: module.SearchOverlay })));
+const PlaceDetails = lazy(() => import('./PlaceDetails').then((module) => ({ default: module.PlaceDetails })));
+const MapCarIcon = lazy(() => import('./MapCarIcon').then((module) => ({ default: module.MapCarIcon })));
 
 const MAP_CAMERA_UPDATE_INTERVAL_MS = 550;
 const MAP_CAMERA_TOP_DOWN_UPDATE_INTERVAL_MS = 1000;
@@ -38,7 +39,25 @@ function getHeadingDelta(previous: number | null | undefined, next: number | nul
 
 export const MapView = React.memo(function MapView() {
   const { isMapOpen, closeMap, isFollowing, setFollowing, currentPos, currentHeading } = useNavigationMapShellState();
-  const { gpsStatus, activeRoute, activeDestination, routeState, routeFailureKind, routeFailureMessage, lastGpsFixAt } = useOSStore(useShallow((state) => ({
+  const {
+    gpsStatus,
+    activeRoute,
+    activeDestination,
+    routeState,
+    routeFailureKind,
+    routeFailureMessage,
+    lastGpsFixAt,
+    isSharingLive,
+    mapProvider,
+    mapTheme,
+    mapPerspective,
+    activeMapIconId,
+    setMapPerspective,
+    locations,
+    setSearchOverlay,
+    discoveredPlace,
+    isSearchOverlayOpen,
+  } = useOSStore(useShallow((state) => ({
     gpsStatus: state.gpsStatus,
     activeRoute: state.activeRoute,
     activeDestination: state.activeDestination,
@@ -46,21 +65,18 @@ export const MapView = React.memo(function MapView() {
     routeFailureKind: state.routeFailureKind,
     routeFailureMessage: state.routeFailureMessage,
     lastGpsFixAt: state.lastGpsFixAt,
-  })));
-  const isSharingLive = useOSStore((state) => state.isSharingLive);
-  const { trips, units } = useDriveSessionState();
-  const { mapProvider, mapTheme, mapPerspective, activeMapIconId } = useOSStore(useShallow((state) => ({
+    isSharingLive: state.isSharingLive,
     mapProvider: state.settings.mapProvider,
     mapTheme: state.settings.mapTheme,
     mapPerspective: state.settings.mapPerspective,
     activeMapIconId: state.activeMapIconId,
-  })));
-  const setMapPerspective = useOSStore((state) => state.setMapPerspective);
-  const locations = useOSStore((state) => state.locations);
-  const { setSearchOverlay, discoveredPlace } = useOSStore(useShallow((state) => ({
+    setMapPerspective: state.setMapPerspective,
+    locations: state.locations,
     setSearchOverlay: state.setSearchOverlay,
     discoveredPlace: state.selectedDiscoveredPlace,
+    isSearchOverlayOpen: state.isSearchOverlayOpen,
   })));
+  const { trips, units } = useDriveSessionState();
   const mapRef = useRef<MapRef | null>(null);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCameraSyncRef = useRef<{
@@ -81,6 +97,7 @@ export const MapView = React.memo(function MapView() {
   const [showShare, setShowShare] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [googleMapCenter, setGoogleMapCenter] = useState<[number, number] | null>(currentPos);
+  const [isLiveDrivePanelHidden, setIsLiveDrivePanelHidden] = useState(false);
   const navigationAlert = useMemo(() => getNavigationAlert({
     gpsStatus,
     routeState,
@@ -92,13 +109,20 @@ export const MapView = React.memo(function MapView() {
   }), [gpsStatus, routeState, routeFailureKind, routeFailureMessage, lastGpsFixAt, activeDestination, activeRoute]);
   const liveDriveTrip = useMemo(() => getLiveDriveTrip(trips), [trips]);
   const shouldShowLiveDrive = Boolean(!activeDestination && !discoveredPlace && liveDriveTrip);
+  const showLiveDrivePanel = shouldShowLiveDrive && !isLiveDrivePanelHidden;
   const liveDriveDurationMs = liveDriveTrip ? getTripDurationMs(liveDriveTrip) : 0;
   const useGooglePreview = mapProvider === 'google' && !shouldShowLiveDrive;
   const canOpenNativeGoogleFullscreen = useGooglePreview && isEmbeddedWebViewAvailable();
+  const liveDrivePanelSessionKey = liveDriveTrip ? `${liveDriveTrip.startTime}:${liveDriveTrip.endTime ?? 'active'}` : 'none';
   const liveDriveGeoJSON = useMemo((): GeoJSON.Feature<GeoJSON.LineString> | null => {
     if (!shouldShowLiveDrive) return null;
     return getPathGeoJson(liveDriveTrip);
   }, [liveDriveTrip, shouldShowLiveDrive]);
+  const mapCarFallbackClassName = isLandscapeMobile ? 'h-[66px] w-[66px]' : 'h-[88px] w-[88px]';
+
+  useEffect(() => {
+    setIsLiveDrivePanelHidden(false);
+  }, [liveDrivePanelSessionKey, activeDestination?.id, discoveredPlace?.id]);
 
   useEffect(() => {
     if (useGooglePreview) {
@@ -341,13 +365,17 @@ export const MapView = React.memo(function MapView() {
         >
           {currentPos && (
             <Marker longitude={currentPos[1]} latitude={currentPos[0]}>
-              <MapCarIcon
-                iconId={activeMapIconId}
-                heading={currentHeading}
-                size={isLandscapeMobile ? 66 : 88}
-                animated
-                showPulse
-              />
+              <Suspense
+                fallback={<div className={cn('rounded-full border-4 border-white/70 bg-primary/80 shadow-glow', mapCarFallbackClassName)} />}
+              >
+                <MapCarIcon
+                  iconId={activeMapIconId}
+                  heading={currentHeading}
+                  size={isLandscapeMobile ? 66 : 88}
+                  animated
+                  showPulse
+                />
+              </Suspense>
             </Marker>
           )}
           {discoveredPlace && (
@@ -404,6 +432,19 @@ export const MapView = React.memo(function MapView() {
               {isFullscreen ? 'Exit' : 'Full'}
             </span>
           </Button>
+          {shouldShowLiveDrive && isLiveDrivePanelHidden && !(activeDestination || discoveredPlace) && (
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => setIsLiveDrivePanelHidden(false)}
+              className={cn(
+                "bg-zinc-950/90 backdrop-blur-3xl border border-emerald-400/25 text-emerald-100 shadow-glow active:scale-95 transition-transform font-black uppercase tracking-[0.18em]",
+                isLandscapeMobile ? 'h-10 rounded-xl px-3 text-[10px]' : 'h-12 rounded-2xl px-4 text-[11px] md:h-16 md:rounded-[1.5rem] md:px-5'
+              )}
+            >
+              Show Live Drive
+            </Button>
+          )}
           <AnimatePresence mode="wait">
             {(activeDestination || discoveredPlace) ? (
               <motion.div 
@@ -429,7 +470,7 @@ export const MapView = React.memo(function MapView() {
                   </span>
                 )}
               </motion.div>
-            ) : shouldShowLiveDrive ? (
+            ) : showLiveDrivePanel ? (
               <motion.div
                 key="live-drive-panel"
                 initial={{ opacity: 0, x: -20 }}
@@ -437,12 +478,23 @@ export const MapView = React.memo(function MapView() {
                 exit={{ opacity: 0, x: -20 }}
                 className="bg-zinc-950/88 backdrop-blur-3xl p-3 sm:p-4 md:p-6 rounded-2xl md:rounded-[2.5rem] flex flex-col justify-center min-w-[190px] sm:min-w-[250px] md:min-w-[390px] border border-emerald-400/25 shadow-glow-lg"
               >
-                <span className="text-[10px] md:text-xs uppercase font-black text-emerald-200/75 tracking-widest flex items-center gap-1.5 md:gap-2">
-                  <Route className="w-3.5 h-3.5 md:w-4 md:h-4" /> Live Drive
-                </span>
-                <span className="text-xl sm:text-2xl md:text-4xl font-black text-white text-neon">
-                  {liveDriveTrip?.endTime ? 'Last untethered drive' : 'Recording the road behind you'}
-                </span>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="text-[10px] md:text-xs uppercase font-black text-emerald-200/75 tracking-widest flex items-center gap-1.5 md:gap-2">
+                      <Route className="w-3.5 h-3.5 md:w-4 md:h-4" /> Live Drive
+                    </span>
+                    <span className="mt-2 block text-xl sm:text-2xl md:text-4xl font-black text-white text-neon">
+                      {liveDriveTrip?.endTime ? 'Last untethered drive' : 'Recording the road behind you'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsLiveDrivePanelHidden(true)}
+                    className="inline-flex h-8 items-center rounded-full border border-white/15 bg-white/5 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    Hide
+                  </button>
+                </div>
                 <span className="mt-2 text-[11px] md:text-sm text-white/72 max-w-[340px]">
                   {liveDriveTrip?.endTime
                     ? 'No destination was pinned, so VelocityOS kept the breadcrumb trail of the path you actually drove.'
@@ -549,9 +601,21 @@ export const MapView = React.memo(function MapView() {
           <Compass className={cn(actionIconClass, isFollowing && "animate-pulse")} />
         </Button>
       </div>
-      <PlaceDetails />
-      <SearchOverlay />
-      {showShare && <TrackingOverlay onClose={() => setShowShare(false)} />}
+      {discoveredPlace && (
+        <Suspense fallback={null}>
+          <PlaceDetails />
+        </Suspense>
+      )}
+      {isSearchOverlayOpen && (
+        <Suspense fallback={null}>
+          <SearchOverlay />
+        </Suspense>
+      )}
+      {showShare && (
+        <Suspense fallback={null}>
+          <TrackingOverlay onClose={() => setShowShare(false)} />
+        </Suspense>
+      )}
     </div>
   );
 });

@@ -51,7 +51,10 @@ import {
 } from '@/lib/app-integrations';
 import {
   askOllama,
+  buildOfflineAssistantReply,
   clearAssistantHistory,
+  getOllamaConnectionHint,
+  isLoopbackOllamaBaseUrl,
   loadAssistantHistory,
   saveAssistantHistory,
   type AssistantMessage,
@@ -607,15 +610,18 @@ function AssistantPanel() {
       });
       setMessages((prev) => [...prev, createAssistantMessage('assistant', reply)]);
       if (aiVoicePreferences.enabled && aiVoicePreferences.autoSpeak) {
-        speakWithAiVoice(reply, aiVoicePreferences);
+        await speakWithAiVoice(reply, aiVoicePreferences);
       }
     } catch {
-      const fallback = 'I could not reach your local Ollama service. Check the model and URL in Settings.';
+      const fallback = buildOfflineAssistantReply(prompt, ollamaBaseUrl);
       setMessages((prev) => [...prev, createAssistantMessage('assistant', fallback)]);
       if (aiVoicePreferences.enabled && aiVoicePreferences.autoSpeak) {
-        speakWithAiVoice(fallback, aiVoicePreferences);
+        await speakWithAiVoice(fallback, aiVoicePreferences);
       }
-      toast.error('Unable to reach Ollama. Verify URL/model in Settings.');
+      const loopbackOnPhone = isLoopbackOllamaBaseUrl(ollamaBaseUrl);
+      toast.info(loopbackOnPhone
+        ? 'Offline assistant mode is active. Update the Ollama URL in Settings to a reachable LAN address.'
+        : 'Ollama is unavailable. Offline assistant mode is active.');
     } finally {
       setIsThinking(false);
     }
@@ -655,7 +661,7 @@ function AssistantPanel() {
       <div className="max-h-56 overflow-y-auto space-y-2 rounded-lg border border-white/10 bg-black/20 p-3">
         {messages.length === 0 ? (
           <div className="text-sm text-muted-foreground">
-            Ask anything. History is stored locally in your browser. Say "{aiName}" then a command to navigate by voice.
+            Ask anything. History is stored locally on this device, and if Ollama is unreachable VelocityOS falls back to built-in offline guidance. Say "{aiName}" then a command to navigate by voice.
           </div>
         ) : (
           messages.map((message) => (
@@ -673,7 +679,7 @@ function AssistantPanel() {
                 {message.role === 'assistant' && aiVoiceEnabled && (
                   <button
                     onClick={() => {
-                      speakWithAiVoice(message.content, aiVoicePreferences);
+                      void speakWithAiVoice(message.content, aiVoicePreferences);
                     }}
                     className="rounded border border-cyan-400/40 bg-cyan-500/10 p-1 text-cyan-100 hover:bg-cyan-500/20"
                     title="Replay with current voice settings"
@@ -725,6 +731,11 @@ function AssistantPanel() {
       </div>
 
       {isThinking && <div className="text-xs text-cyan-200">Thinking with Ollama...</div>}
+      {isLoopbackOllamaBaseUrl(ollamaBaseUrl) && (
+        <div className="rounded-lg border border-amber-400/35 bg-amber-500/10 p-3 text-xs text-amber-100">
+          {getOllamaConnectionHint(ollamaBaseUrl)}
+        </div>
+      )}
     </div>
   );
 }

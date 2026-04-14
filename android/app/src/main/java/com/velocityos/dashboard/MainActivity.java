@@ -3,12 +3,17 @@ package com.velocityos.dashboard;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.Window;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -19,7 +24,9 @@ public class MainActivity extends BridgeActivity {
 	public void onCreate(Bundle savedInstanceState) {
 		registerPlugin(EmbeddedWebViewPlugin.class);
 		registerPlugin(NativeMonitorPlugin.class);
+		registerPlugin(NativeTtsPlugin.class);
 		super.onCreate(savedInstanceState);
+		applyImmersiveMode();
 		ensureRuntimePermissions();
 		ensureSpeedMonitorRunning();
 	}
@@ -27,8 +34,17 @@ public class MainActivity extends BridgeActivity {
 	@Override
 	public void onResume() {
 		super.onResume();
+		applyImmersiveMode();
 		ensureRuntimePermissions();
 		ensureSpeedMonitorRunning();
+	}
+
+	@Override
+	public void onWindowFocusChanged(boolean hasFocus) {
+		super.onWindowFocusChanged(hasFocus);
+		if (hasFocus) {
+			applyImmersiveMode();
+		}
 	}
 
 	@Override
@@ -69,6 +85,25 @@ public class MainActivity extends BridgeActivity {
 					SPEED_MONITOR_PERMISSION_REQUEST_CODE
 			);
 		}
+	}
+
+	private void applyImmersiveMode() {
+		Window window = getWindow();
+		if (window == null) {
+			return;
+		}
+
+		WindowCompat.setDecorFitsSystemWindows(window, false);
+		window.setStatusBarColor(Color.TRANSPARENT);
+		window.setNavigationBarColor(Color.TRANSPARENT);
+
+		WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(window, window.getDecorView());
+		if (controller == null) {
+			return;
+		}
+
+		controller.hide(WindowInsetsCompat.Type.systemBars());
+		controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
 	}
 
 	private void ensureSpeedMonitorRunning() {

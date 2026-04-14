@@ -34,7 +34,8 @@ import {
   AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { getAiVoicePreferences, speakWithAiVoice, stopAiVoice } from '@/lib/ai-voice';
+import { getAiVoicePreferences, getAvailableAiVoiceProfiles, isAiVoiceOutputSupported, primeSpeechVoices, speakWithAiVoice, stopAiVoice, type AiVoiceProfile } from '@/lib/ai-voice';
+import { isLoopbackOllamaBaseUrl } from '@/lib/ollama-assistant';
 import { getAmbientEffectById, getScenePackById, getWidgetSkinById } from '@/lib/cosmetic-market';
 import { SystemStatusHub } from '@/components/system/SystemStatusHub';
 import { useLiveTrackingState, useParkedDemoState } from '@/store/os-domain-hooks';
@@ -132,8 +133,9 @@ export function SettingsPage() {
   const [ollamaModelDraft, setOllamaModelDraft] = useState(ollamaModel);
   const [aiVoiceLangDraft, setAiVoiceLangDraft] = useState(aiVoiceLang);
   const [voicePreviewText, setVoicePreviewText] = useState('Hello driver, this is your AI voice preview.');
-  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [isSpeechSupported, setIsSpeechSupported] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState<AiVoiceProfile[]>([]);
+  const [isVoiceOutputSupported, setIsVoiceOutputSupported] = useState(false);
+  const [isVoiceCatalogLoading, setIsVoiceCatalogLoading] = useState(true);
   const [highlightMicToggle, setHighlightMicToggle] = useState(false);
   const monitorConfigRef = useRef<NativeMonitorConfig | null>(null);
   const monitorSaveTokenRef = useRef(0);
@@ -167,28 +169,50 @@ export function SettingsPage() {
   }, [aiVoiceLang]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      setIsSpeechSupported(false);
-      setAvailableVoices([]);
-      return;
-    }
+    let active = true;
+    let previousOnVoicesChanged: SpeechSynthesis['onvoiceschanged'] | null = null;
 
-    const synth = window.speechSynthesis;
-    const updateVoices = () => {
-      const voices = synth
-        .getVoices()
-        .slice()
-        .sort((a, b) => a.name.localeCompare(b.name));
+    const updateVoices = async () => {
+      primeSpeechVoices();
+
+      const [supported, voices] = await Promise.all([
+        isAiVoiceOutputSupported(),
+        getAvailableAiVoiceProfiles(),
+      ]);
+
+      if (!active) {
+        return;
+      }
+
+      setIsVoiceOutputSupported(supported);
       setAvailableVoices(voices);
-      setIsSpeechSupported(true);
+      if (voices.length > 0) {
+        setIsVoiceCatalogLoading(false);
+      }
     };
 
-    updateVoices();
-    const previousOnVoicesChanged = synth.onvoiceschanged;
-    synth.onvoiceschanged = updateVoices;
+    void updateVoices();
+    const loadingTimeoutId = window.setTimeout(() => {
+      if (active) {
+        setIsVoiceCatalogLoading(false);
+      }
+    }, 1800);
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const synth = window.speechSynthesis;
+      previousOnVoicesChanged = synth.onvoiceschanged;
+      synth.onvoiceschanged = () => {
+        void updateVoices();
+        setIsVoiceCatalogLoading(false);
+      };
+    }
 
     return () => {
-      synth.onvoiceschanged = previousOnVoicesChanged;
+      active = false;
+      window.clearTimeout(loadingTimeoutId);
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = previousOnVoicesChanged;
+      }
     };
   }, []);
 
@@ -247,10 +271,11 @@ export function SettingsPage() {
     setAiVoiceLangDraft(selectedVoice.lang || 'en-US');
   }, [availableVoices, aiVoiceLangDraft, updateSettings]);
 
-  const previewAiVoice = useCallback(() => {
-    const spoken = speakWithAiVoice(voicePreviewText, aiVoicePreferences);
+  const previewAiVoice = useCallback(async () => {
+    primeSpeechVoices();
+    const spoken = await speakWithAiVoice(voicePreviewText, aiVoicePreferences);
     if (!spoken) {
-      toast.error('Voice preview unavailable. Enable AI voice and check browser speech support.');
+      toast.error('Voice preview unavailable. Enable AI voice output and check device speech support.');
     }
   }, [aiVoicePreferences, voicePreviewText]);
 
@@ -605,22 +630,33 @@ export function SettingsPage() {
             <div className={cn("grid grid-cols-1 md:grid-cols-2", isLandscapeMobile ? "gap-2" : "gap-4")}>
               <div className={cn("bg-white/5 border border-white/10", isLandscapeMobile ? "p-3 rounded-xl space-y-1" : "p-6 rounded-[2rem] space-y-2")}>
                 <Label htmlFor="ai-voice-profile" className={cn("font-bold", isLandscapeMobile ? "text-xs" : "text-base")}>Voice Profile</Label>
-                {isSpeechSupported ? (
-                  <select
-                    id="ai-voice-profile"
-                    value={selectedVoiceIndex >= 0 ? String(selectedVoiceIndex) : ''}
-                    onChange={handleVoiceSelection}
-                    className={cn("w-full rounded-md border border-white/20 bg-black/40 px-3", isLandscapeMobile ? "h-9 text-sm" : "h-11 text-base")}
-                  >
-                    <option value="">System default</option>
-                    {availableVoices.map((voice, index) => (
-                      <option key={`${voice.name}-${voice.lang}-${index}`} value={String(index)}>
-                        {voice.name} ({voice.lang})
-                      </option>
-                    ))}
-                  </select>
+                {isVoiceOutputSupported ? (
+                  <>
+                    <select
+                      id="ai-voice-profile"
+                      value={selectedVoiceIndex >= 0 ? String(selectedVoiceIndex) : ''}
+                      onChange={handleVoiceSelection}
+                      className={cn("w-full rounded-md border border-white/20 bg-black/40 px-3", isLandscapeMobile ? "h-9 text-sm" : "h-11 text-base")}
+                    >
+                      <option value="">System default</option>
+                      {availableVoices.map((voice, index) => (
+                        <option key={`${voice.name}-${voice.lang}-${index}`} value={String(index)}>
+                          {voice.name} ({voice.lang}){voice.provider === 'android-native' ? ' • Android' : ' • Browser'}
+                        </option>
+                      ))}
+                    </select>
+                    {isVoiceCatalogLoading ? (
+                      <div className={cn("rounded-md border border-white/10 bg-white/5 text-white/70", isLandscapeMobile ? "p-2 text-[10px]" : "p-3 text-xs")}>
+                        Loading installed voice profiles from the device...
+                      </div>
+                    ) : availableVoices.length === 0 ? (
+                      <div className={cn("rounded-md border border-white/10 bg-white/5 text-white/70", isLandscapeMobile ? "p-2 text-[10px]" : "p-3 text-xs")}>
+                        No named voice profiles were exposed by this device. VelocityOS will still use the system default voice output when available.
+                      </div>
+                    ) : null}
+                  </>
                 ) : (
-                  <div className={cn("rounded-md border border-amber-400/40 bg-amber-500/10 text-amber-200", isLandscapeMobile ? "p-2 text-[10px]" : "p-3 text-xs")}>Speech synthesis is unavailable in this browser/device.</div>
+                  <div className={cn("rounded-md border border-amber-400/40 bg-amber-500/10 text-amber-200", isLandscapeMobile ? "p-2 text-[10px]" : "p-3 text-xs")}>Voice output is unavailable on this device right now.</div>
                 )}
                 <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[10px]" : "text-xs")}>Choose any installed system voice profile</p>
               </div>
@@ -713,7 +749,7 @@ export function SettingsPage() {
               <div className="flex gap-2">
                 <Button
                   type="button"
-                  onClick={previewAiVoice}
+                  onClick={() => { void previewAiVoice(); }}
                   className={cn("font-black", isLandscapeMobile ? "h-9 text-xs rounded-lg" : "h-11 text-sm rounded-xl")}
                 >
                   <Play className="w-4 h-4" />
@@ -746,7 +782,13 @@ export function SettingsPage() {
                   }}
                   className={cn("bg-black/40 border-white/20", isLandscapeMobile ? "h-9 text-sm" : "h-11 text-lg")}
                 />
-                <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[10px]" : "text-xs")}>Example: http://127.0.0.1:11434</p>
+                {isLoopbackOllamaBaseUrl(ollamaBaseUrlDraft) ? (
+                  <div className={cn("rounded-md border border-amber-400/35 bg-amber-500/10 text-amber-100", isLandscapeMobile ? "p-2 text-[10px]" : "p-3 text-xs")}>
+                    On a phone, 127.0.0.1 points at the phone itself. Use the LAN IP of the computer running Ollama instead.
+                  </div>
+                ) : (
+                  <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[10px]" : "text-xs")}>Example: http://192.168.1.25:11434</p>
+                )}
               </div>
 
               <div className={cn("bg-white/5 border border-white/10", isLandscapeMobile ? "p-3 rounded-xl space-y-1" : "p-6 rounded-[2rem] space-y-2")}>

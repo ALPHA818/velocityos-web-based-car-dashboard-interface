@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { Suspense, lazy, useEffect, useState, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import Map, { Marker, Source, Layer } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -8,8 +8,9 @@ import { api } from '@/lib/api-client';
 import { formatDistanceToNow } from 'date-fns';
 import type { TrackingState } from '@shared/types';
 import { useOSStore } from '@/store/use-os-store';
-import { MapCarIcon } from '@/components/drive/MapCarIcon';
 import { formatDriveDistance, formatDriveDuration, getPathGeoJson } from '@/lib/live-drive';
+
+const MapCarIcon = lazy(() => import('@/components/drive/MapCarIcon').then((module) => ({ default: module.MapCarIcon })));
 export function TrackingPage() {
   const { id } = useParams();
   const [data, setData] = useState<TrackingState | null>(null);
@@ -120,13 +121,15 @@ export function TrackingPage() {
             </Source>
           )}
           <Marker longitude={data.lon} latitude={data.lat}>
-            <MapCarIcon
-              iconId={activeMapIconId}
-              heading={data.heading || 0}
-              size={78}
-              animated
-              showPulse
-            />
+            <Suspense fallback={<div className="h-[78px] w-[78px] rounded-full border-4 border-white/70 bg-primary/80 shadow-glow" />}>
+              <MapCarIcon
+                iconId={activeMapIconId}
+                heading={data.heading || 0}
+                size={78}
+                animated
+                showPulse
+              />
+            </Suspense>
           </Marker>
         </Map>
         <div className="absolute top-6 left-6 z-[1000] p-6 bg-zinc-950/90 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl hidden md:block w-80">
