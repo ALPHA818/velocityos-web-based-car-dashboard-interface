@@ -15,6 +15,8 @@ export interface UserSettings {
   theme: 'dark' | 'light';
   autoTheme: boolean;
   mapPerspective: 'driving' | 'top-down';
+  keepScreenAwake: boolean;
+  lowBatterySaverEnabled: boolean;
   aiName: string;
   aiVoiceControlEnabled: boolean;
   ollamaBaseUrl: string;

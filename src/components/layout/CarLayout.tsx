@@ -62,6 +62,7 @@ const GEOLOCATION_UPDATE_INTERVAL_MS = 600;
 const GEOLOCATION_MIN_POSITION_DELTA = 0.00003;
 const GEOLOCATION_MIN_HEADING_DELTA = 8;
 const NAVIGATION_ALERT_REFRESH_MS = 5000;
+const LOW_BATTERY_SAVER_THRESHOLD = 20;
 
 const SIDEBAR_CLOCK_FORMATTER = new Intl.DateTimeFormat('en-GB', {
   hour: '2-digit',
@@ -228,6 +229,8 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
     activeScenePackId,
     activeAmbientEffectId,
     activeWidgetSkinId,
+    keepScreenAwake,
+    lowBatterySaverEnabled,
     aiName,
     aiVoiceControlEnabled,
     ollamaBaseUrl,
@@ -251,6 +254,8 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
     activeScenePackId: state.activeScenePackId,
     activeAmbientEffectId: state.activeAmbientEffectId,
     activeWidgetSkinId: state.activeWidgetSkinId,
+    keepScreenAwake: state.settings.keepScreenAwake,
+    lowBatterySaverEnabled: state.settings.lowBatterySaverEnabled,
     aiName: state.settings.aiName,
     aiVoiceControlEnabled: state.settings.aiVoiceControlEnabled,
     ollamaBaseUrl: state.settings.ollamaBaseUrl,
@@ -288,10 +293,14 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const isBottomSidebar = !isLandscapeMobile && isMobile;
   const isCompactSidebarMeta = isLandscapeMobile || isBottomSidebar;
   const isLibrarySource = isLibraryMediaSource(activeSource);
+  const isLowBatterySaverActive = lowBatterySaverEnabled && battery.supported && !battery.charging && battery.level <= LOW_BATTERY_SAVER_THRESHOLD;
+  const isWakeWordNavigationEnabled = aiVoiceControlEnabled && !isLowBatterySaverActive;
+  const isVoiceControlSuspendedByBatterySaver = aiVoiceControlEnabled && isLowBatterySaverActive;
   const track = isLibrarySource ? getTrack(currentTrackIndex) : null;
   const [showMicStatusPopup, setShowMicStatusPopup] = useState(false);
   const [nativeMonitorConfig, setNativeMonitorConfigState] = useState<NativeMonitorConfig | null>(null);
   const trackIntervalRef = useRef<number | null>(null);
+  const wakeLockRef = useRef<any>(null);
   const trackingSnapshotRef = useRef<{
     trackingId: string | null;
     currentPos: [number, number] | null;
@@ -324,6 +333,10 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   const activeAmbientEffect = useMemo(
     () => getAmbientEffectById(activeAmbientEffectId) ?? getAmbientEffectById('effect-clear-air'),
     [activeAmbientEffectId]
+  );
+  const shellAmbientEffect = useMemo(
+    () => (isLowBatterySaverActive ? getAmbientEffectById('effect-clear-air') ?? activeAmbientEffect : activeAmbientEffect),
+    [activeAmbientEffect, isLowBatterySaverActive]
   );
   const activeWidgetSkin = useMemo(
     () => getWidgetSkinById(activeWidgetSkinId) ?? getWidgetSkinById('widget-core-digital'),
@@ -431,7 +444,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   }, [handleAiVoiceFallback]);
 
   useWakeWordNavigation({
-    enabled: aiVoiceControlEnabled,
+    enabled: isWakeWordNavigationEnabled,
     wakeWord: aiName,
     isMapOpen,
     navigateTo,
@@ -460,7 +473,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
         lastThemeUpdateRef.current = hour;
         const isNight = hour >= 18 || hour < 6;
         const targetTheme = isNight ? 'dark' : 'light';
-        updateSettings({ theme: targetTheme, mapTheme: isNight ? 'highway' : 'light' });
+        updateSettings({ theme: targetTheme, mapTheme: isNight ? 'dark' : 'light' });
       }
     };
 
@@ -474,7 +487,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
   }, [activeThemeId]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || isMobile) return;
+    if (typeof window === 'undefined' || isMobile || isLowBatterySaverActive) return;
 
     const warmShellModules = () => {
       void Promise.allSettled([
@@ -496,7 +509,68 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [isMobile]);
+  }, [isLowBatterySaverActive, isMobile]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    let disposed = false;
+
+    const releaseWakeLock = async () => {
+      const activeWakeLock = wakeLockRef.current;
+      wakeLockRef.current = null;
+      if (!activeWakeLock || typeof activeWakeLock.release !== 'function') {
+        return;
+      }
+
+      try {
+        await activeWakeLock.release();
+      } catch {
+        // Ignore release failures when the browser has already torn down the wake lock.
+      }
+    };
+
+    const acquireWakeLock = async () => {
+      if (disposed || !keepScreenAwake || document.visibilityState !== 'visible' || wakeLockRef.current) {
+        return;
+      }
+
+      const wakeLock = await requestWakeLock();
+      if (disposed) {
+        if (wakeLock && typeof wakeLock.release === 'function') {
+          wakeLock.release().catch(() => {});
+        }
+        return;
+      }
+
+      wakeLockRef.current = wakeLock;
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void acquireWakeLock();
+        return;
+      }
+
+      void releaseWakeLock();
+    };
+
+    if (keepScreenAwake) {
+      void acquireWakeLock();
+    } else {
+      void releaseWakeLock();
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      disposed = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      void releaseWakeLock();
+    };
+  }, [keepScreenAwake]);
 
   useEffect(() => {
     let active = true;
@@ -614,11 +688,8 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
       (err) => { if (err.code === 1) setCurrentPos(null, 0, null, true); },
       { enableHighAccuracy: true }
     );
-    let wakeLock: any = null;
-    requestWakeLock().then(lock => wakeLock = lock);
     return () => {
       navigator.geolocation.clearWatch(watchId);
-      if (wakeLock) wakeLock.release().catch(() => {});
     };
   }, [setCurrentPos, setGpsStatus]);
   return (
@@ -696,7 +767,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
         <DashboardBackdrop
           className="z-0"
           scene={activeScene}
-          effect={activeAmbientEffect}
+          effect={shellAmbientEffect}
           weatherCode={weather?.code}
           charging={battery.charging}
           parked={!isMapOpen && isParked}
@@ -713,7 +784,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
           activeDestination={activeDestination}
           activeRoute={activeRoute}
           activeScene={activeScene}
-          activeAmbientEffect={activeAmbientEffect}
+          activeAmbientEffect={shellAmbientEffect}
           onAction={handleNavigationBannerAction}
         />
         {shouldShowIdlePanel && (
@@ -772,7 +843,9 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
               'right-2 top-2 md:right-4 md:top-4',
               'w-[205px] md:w-[240px] p-2.5 md:p-3',
               aiVoiceControlEnabled
-                ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
+                ? isVoiceControlSuspendedByBatterySaver
+                  ? 'border-amber-400/40 bg-amber-500/15 text-amber-100'
+                  : 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
                 : 'border-rose-400/40 bg-rose-500/15 text-rose-100'
             )}
           >
@@ -789,10 +862,14 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
                 Microphone Status
               </div>
               <div className={cn('font-semibold mt-0.5', isLandscapeMobile ? 'text-[11px]' : 'text-sm')}>
-                {aiVoiceControlEnabled ? 'Mic is ON for voice control' : 'Mic is OFF for voice control'}
+                {isVoiceControlSuspendedByBatterySaver
+                  ? 'Mic is paused to save battery'
+                  : aiVoiceControlEnabled
+                    ? 'Mic is ON for voice control'
+                    : 'Mic is OFF for voice control'}
               </div>
               <div className={cn('opacity-80 mt-1', isLandscapeMobile ? 'text-[9px]' : 'text-[11px]')}>
-                Tap to open settings
+                {isVoiceControlSuspendedByBatterySaver ? 'Charge the phone or change power settings to restore wake-word listening.' : 'Tap to open settings'}
               </div>
             </button>
             <button
@@ -815,7 +892,7 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
               variant="strip"
               gpsStatus={gpsStatus}
               network={network}
-              micEnabled={aiVoiceControlEnabled}
+              micEnabled={isWakeWordNavigationEnabled}
               isSharingLive={isSharingLive}
               trackingId={trackingId}
               nativeMonitorConfig={nativeMonitorConfig}

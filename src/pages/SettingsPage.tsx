@@ -7,6 +7,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
+import { useBatteryStatus } from '@/hooks/use-battery-status';
 import { usePWAInstall } from '@/hooks/use-pwa-install';
 import { cn } from "@/lib/utils";
 import { useIsLandscapeMobile } from '@/hooks/use-landscape-mobile';
@@ -39,12 +40,17 @@ import { isLoopbackOllamaBaseUrl } from '@/lib/ollama-assistant';
 import { getAmbientEffectById, getScenePackById, getWidgetSkinById } from '@/lib/cosmetic-market';
 import { SystemStatusHub } from '@/components/system/SystemStatusHub';
 import { useLiveTrackingState, useParkedDemoState } from '@/store/os-domain-hooks';
+
+const LOW_BATTERY_SAVER_THRESHOLD = 20;
+
 export function SettingsPage() {
   const location = useLocation();
   const units = useOSStore((s) => s.settings.units);
   const mapTheme = useOSStore((s) => s.settings.mapTheme);
   const mapPerspective = useOSStore((s) => s.settings.mapPerspective);
   const autoTheme = useOSStore((s) => s.settings.autoTheme);
+  const keepScreenAwake = useOSStore((s) => s.settings.keepScreenAwake);
+  const lowBatterySaverEnabled = useOSStore((s) => s.settings.lowBatterySaverEnabled);
   const aiName = useOSStore((s) => s.settings.aiName);
   const aiVoiceControlEnabled = useOSStore((s) => s.settings.aiVoiceControlEnabled);
   const ollamaBaseUrl = useOSStore((s) => s.settings.ollamaBaseUrl);
@@ -68,9 +74,12 @@ export function SettingsPage() {
   const { parkedDemoStatus, openParkedDemo } = useParkedDemoState();
   const { isInstallable, install } = usePWAInstall();
   const isLandscapeMobile = useIsLandscapeMobile();
+  const battery = useBatteryStatus();
   const network = useNetworkStatus({ offlineGraceMs: 3000 });
   const isNativeMonitorAvailable = isNativeMonitorPluginAvailable();
   const isParked = !currentSpeed || currentSpeed < 0.8;
+  const hasWakeLockSupport = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
+  const isLowBatterySaverActive = lowBatterySaverEnabled && battery.supported && !battery.charging && battery.level <= LOW_BATTERY_SAVER_THRESHOLD;
   const activeScene = getScenePackById(activeScenePackId) ?? getScenePackById('scene-garage-grid');
   const activeAmbientEffect = getAmbientEffectById(activeAmbientEffectId) ?? getAmbientEffectById('effect-clear-air');
   const activeWidgetSkin = getWidgetSkinById(activeWidgetSkinId) ?? getWidgetSkinById('widget-core-digital');
@@ -1015,18 +1024,65 @@ export function SettingsPage() {
                   {parkedDemoStatus === 'completed' ? 'Replay Demo' : parkedDemoStatus === 'dismissed' ? 'Resume Demo' : 'Start Demo'}
                 </Button>
               </div>
-              <div className={cn("flex items-center justify-between bg-white/5 border border-white/10", isLandscapeMobile ? "p-3 rounded-xl" : "p-6 rounded-[2rem]")}>
-                <div>
-                  <span className={cn("font-bold", isLandscapeMobile ? "text-sm" : "text-xl")}>Stay Awake API</span>
-                  <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[11px] mt-1" : "text-sm mt-2")}>
-                    {isParked ? 'Ready to keep the dashboard active during setup and demos.' : 'Screen wake support stays available while the car is moving.'}
-                  </p>
+              <div className={cn("bg-white/5 border border-white/10", isLandscapeMobile ? "p-3 rounded-xl space-y-3" : "p-6 rounded-[2rem] space-y-5")}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className={cn("font-bold", isLandscapeMobile ? "text-sm" : "text-xl")}>Power management</span>
+                    <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[11px] mt-1" : "text-sm mt-2")}>
+                      Keep the cockpit visible when you want it, then trim background extras automatically when charge runs low.
+                    </p>
+                  </div>
+                  <div className={cn("rounded-full border border-white/15 bg-black/25 text-primary", isLandscapeMobile ? "p-2" : "p-3")}>
+                    <Zap className={cn(isLandscapeMobile ? "w-4 h-4" : "w-5 h-5")} />
+                  </div>
                 </div>
-                {'wakeLock' in navigator ? (
-                  <div className={cn("flex items-center text-green-500 font-black uppercase", isLandscapeMobile ? "gap-2 text-xs" : "gap-3")}><CheckCircle className={cn(isLandscapeMobile ? "w-4 h-4" : "w-6 h-6")} /> Ready</div>
-                ) : (
-                  <div className={cn("flex items-center text-muted-foreground font-black uppercase", isLandscapeMobile ? "gap-2 text-xs" : "gap-3")}><XCircle className={cn(isLandscapeMobile ? "w-4 h-4" : "w-6 h-6")} /> Blocked</div>
-                )}
+                <div className={cn("flex items-center justify-between gap-4 border border-white/10 bg-black/20", isLandscapeMobile ? "rounded-xl p-3" : "rounded-[1.5rem] p-4") }>
+                  <div>
+                    <p className={cn("font-bold", isLandscapeMobile ? "text-sm" : "text-base")}>Keep screen awake</p>
+                    <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[10px] mt-1" : "text-xs mt-1")}>Requests a wake lock so the dashboard does not dim while you are using it.</p>
+                  </div>
+                  <Switch
+                    checked={keepScreenAwake}
+                    onCheckedChange={(value) => void updateSettings({ keepScreenAwake: value })}
+                    className={cn(isLandscapeMobile ? "scale-95" : "scale-125")}
+                  />
+                </div>
+                <div className={cn("flex items-center justify-between gap-4 border border-white/10 bg-black/20", isLandscapeMobile ? "rounded-xl p-3" : "rounded-[1.5rem] p-4") }>
+                  <div>
+                    <p className={cn("font-bold", isLandscapeMobile ? "text-sm" : "text-base")}>Auto battery saver</p>
+                    <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[10px] mt-1" : "text-xs mt-1")}>
+                      Below {LOW_BATTERY_SAVER_THRESHOLD}% and not charging, pause wake-word listening, animated ambience, and background warmups.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={lowBatterySaverEnabled}
+                    onCheckedChange={(value) => void updateSettings({ lowBatterySaverEnabled: value })}
+                    className={cn(isLandscapeMobile ? "scale-95" : "scale-125")}
+                  />
+                </div>
+                <div className={cn("grid grid-cols-1 md:grid-cols-3", isLandscapeMobile ? "gap-2" : "gap-3")}>
+                  <div className={cn("flex items-center justify-between border", isLandscapeMobile ? "rounded-xl p-2.5" : "rounded-2xl p-3", hasWakeLockSupport ? "border-green-500/35 bg-green-500/10" : "border-white/10 bg-white/5")}>
+                    <span className={cn("font-bold uppercase tracking-wide", isLandscapeMobile ? "text-[10px]" : "text-xs")}>Wake lock</span>
+                    {hasWakeLockSupport ? (
+                      <div className={cn("flex items-center text-green-400 font-black uppercase", isLandscapeMobile ? "gap-1 text-[10px]" : "gap-2 text-xs")}><CheckCircle className={cn(isLandscapeMobile ? "w-3.5 h-3.5" : "w-4 h-4")} /> Ready</div>
+                    ) : (
+                      <div className={cn("flex items-center text-muted-foreground font-black uppercase", isLandscapeMobile ? "gap-1 text-[10px]" : "gap-2 text-xs")}><XCircle className={cn(isLandscapeMobile ? "w-3.5 h-3.5" : "w-4 h-4")} /> Blocked</div>
+                    )}
+                  </div>
+                  <div className={cn("flex items-center justify-between border", isLandscapeMobile ? "rounded-xl p-2.5" : "rounded-2xl p-3", isLowBatterySaverActive ? "border-amber-400/35 bg-amber-500/10 text-amber-100" : "border-white/10 bg-white/5")}>
+                    <span className={cn("font-bold uppercase tracking-wide", isLandscapeMobile ? "text-[10px]" : "text-xs")}>Saver status</span>
+                    <span className={cn("font-black uppercase", isLandscapeMobile ? "text-[10px]" : "text-xs")}>{isLowBatterySaverActive ? 'Active' : 'Standby'}</span>
+                  </div>
+                  <div className={cn("flex items-center justify-between border border-white/10 bg-white/5", isLandscapeMobile ? "rounded-xl p-2.5" : "rounded-2xl p-3")}>
+                    <span className={cn("font-bold uppercase tracking-wide", isLandscapeMobile ? "text-[10px]" : "text-xs")}>Battery</span>
+                    <span className={cn("font-black uppercase", isLandscapeMobile ? "text-[10px]" : "text-xs")}>
+                      {battery.supported ? `${battery.level}%${battery.charging ? ' Charging' : ''}` : 'Unavailable'}
+                    </span>
+                  </div>
+                </div>
+                <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[10px]" : "text-xs")}>
+                  Active driving, navigation, and playback stay available. Only background power drains are trimmed automatically.
+                </p>
               </div>
             </div>
             {isInstallable && (
