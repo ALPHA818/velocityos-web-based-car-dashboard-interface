@@ -27,6 +27,8 @@ interface BookmarkInput {
 export interface TripRecord {
   startTime: number;
   endTime?: number;
+  idleStartedAt?: number;
+  lastMotionAt?: number;
   distanceKm: number;
   destinationLabel?: string | null;
   averageSpeedKph?: number;
@@ -137,10 +139,10 @@ const defaultSettings: UserSettings = {
   theme: 'dark',
   autoTheme: true,
   mapPerspective: 'top-down',
-  aiName: 'nova',
-  aiVoiceControlEnabled: true,
   keepScreenAwake: true,
   lowBatterySaverEnabled: true,
+  aiName: 'nova',
+  aiVoiceControlEnabled: true,
   ollamaBaseUrl: 'http://127.0.0.1:11434',
   ollamaModel: 'llama3.2',
   aiVoiceEnabled: true,
@@ -169,10 +171,10 @@ function normalizeSettings(raw: Partial<UserSettings> | null | undefined): UserS
     ...merged,
     id: 'default',
     aiName: aiName || defaultSettings.aiName,
-    aiVoiceControlEnabled: Boolean(merged.aiVoiceControlEnabled),
-    ollamaBaseUrl: ollamaBaseUrl || defaultSettings.ollamaBaseUrl,
     keepScreenAwake: Boolean(merged.keepScreenAwake),
     lowBatterySaverEnabled: Boolean(merged.lowBatterySaverEnabled),
+    aiVoiceControlEnabled: Boolean(merged.aiVoiceControlEnabled),
+    ollamaBaseUrl: ollamaBaseUrl || defaultSettings.ollamaBaseUrl,
     ollamaModel: ollamaModel || defaultSettings.ollamaModel,
     aiVoiceEnabled: Boolean(merged.aiVoiceEnabled),
     aiVoiceAutoSpeak: Boolean(merged.aiVoiceAutoSpeak),
@@ -186,6 +188,75 @@ function normalizeSettings(raw: Partial<UserSettings> | null | undefined): UserS
 
 function mergeUnlockedIds(existingIds: string[], incomingIds: string[]) {
   return Array.from(new Set([...existingIds, ...incomingIds]));
+}
+
+const MOVING_SPEED_THRESHOLD_MPS = 0.8;
+const DIRECT_SPEED_MIN_MPS = 0.4;
+const DERIVED_SPEED_MIN_SAMPLE_MS = 900;
+const DERIVED_SPEED_MAX_SAMPLE_MS = 10000;
+const DERIVED_SPEED_MIN_DISTANCE_M = 4;
+const DERIVED_SPEED_MAX_DISTANCE_M = 250;
+const TRIP_STOP_GRACE_MS = 10 * 60 * 1000;
+const TRIP_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+function cloneTripRecord(trip: TripRecord): TripRecord {
+  return {
+    ...trip,
+    path: trip.path ? [...trip.path] : undefined,
+  };
+}
+
+function finalizeIdleTrip(trip: TripRecord, now: number) {
+  if (trip.endTime || trip.idleStartedAt == null) {
+    return;
+  }
+
+  if (now - trip.idleStartedAt >= TRIP_STOP_GRACE_MS) {
+    trip.endTime = trip.idleStartedAt + TRIP_STOP_GRACE_MS;
+    trip.idleStartedAt = undefined;
+  }
+}
+
+function normalizeTrips(trips: TripRecord[] | undefined, now = Date.now()) {
+  const retentionCutoff = now - TRIP_RETENTION_MS;
+
+  return (trips ?? [])
+    .map(cloneTripRecord)
+    .filter((trip) => !trip.endTime || trip.endTime >= retentionCutoff)
+    .map((trip) => {
+      finalizeIdleTrip(trip, now);
+      return trip;
+    });
+}
+
+function resolveMotionSpeedMps(
+  rawSpeed: number | null | undefined,
+  previousPos: [number, number] | null,
+  previousFixAt: number | null,
+  nextPos: [number, number] | null,
+  nextFixAt: number,
+) {
+  const directSpeed = typeof rawSpeed === 'number' && Number.isFinite(rawSpeed) ? Math.max(0, rawSpeed) : null;
+
+  if (directSpeed != null && directSpeed >= DIRECT_SPEED_MIN_MPS) {
+    return directSpeed;
+  }
+
+  if (!previousPos || !nextPos || previousFixAt == null) {
+    return directSpeed ?? 0;
+  }
+
+  const dtMs = nextFixAt - previousFixAt;
+  if (dtMs < DERIVED_SPEED_MIN_SAMPLE_MS || dtMs > DERIVED_SPEED_MAX_SAMPLE_MS) {
+    return directSpeed ?? 0;
+  }
+
+  const distanceMeters = haversineDistance(previousPos[0], previousPos[1], nextPos[0], nextPos[1]);
+  if (distanceMeters < DERIVED_SPEED_MIN_DISTANCE_M || distanceMeters > DERIVED_SPEED_MAX_DISTANCE_M) {
+    return directSpeed ?? 0;
+  }
+
+  return Number((distanceMeters / (dtMs / 1000)).toFixed(3));
 }
 
 function spendCurrency(state: Pick<OSState, 'settings' | 'kmCoinBalance' | 'mCoinBalance'>, cost: number) {
@@ -574,7 +645,7 @@ export const useOSStore = create<OSState>()(
         }
 
         set((state) => {
-            const now = Date.now();
+          const now = Date.now();
           const validHeading = typeof heading === 'number' && !isNaN(heading);
           const previousHeading = state.currentHeading ?? 0;
           const nextHeading = validHeading ? heading : previousHeading;
@@ -584,11 +655,16 @@ export const useOSStore = create<OSState>()(
           let nextTotalDistanceKm = state.totalDistanceKm;
           let nextKmCoinBalance = state.kmCoinBalance;
           let nextMCoinBalance = state.mCoinBalance;
-          const nextTrips = [...state.trips];
-          const speedMps = typeof speed === 'number' && !isNaN(speed) ? speed : 0;
+          const nextTrips = normalizeTrips(state.trips, now);
+          const speedMps = resolveMotionSpeedMps(speed, state.currentPos, state.lastGpsFixAt, pos, now);
           const speedKph = speedMps * 3.6;
-          const isMoving = speedMps > 0.8;
+          const isMoving = speedMps > MOVING_SPEED_THRESHOLD_MPS;
           const activeTarget = state.activeDestination || state.selectedDiscoveredPlace;
+
+          const openTrip = nextTrips[nextTrips.length - 1];
+          if (openTrip) {
+            finalizeIdleTrip(openTrip, now);
+          }
 
           if (pos && state.currentPos) {
             const segmentMeters = haversineDistance(
@@ -621,6 +697,7 @@ export const useOSStore = create<OSState>()(
                   nextTrips.push({
                     startTime: now,
                     distanceKm: 0,
+                    lastMotionAt: now,
                     destinationLabel: activeTarget?.label ?? null,
                     averageSpeedKph: speedKph,
                     maxSpeedKph: speedKph,
@@ -631,6 +708,8 @@ export const useOSStore = create<OSState>()(
                 }
                 const activeTrip = nextTrips[nextTrips.length - 1];
                 activeTrip.distanceKm = Number((activeTrip.distanceKm + segmentKm).toFixed(3));
+                activeTrip.idleStartedAt = undefined;
+                activeTrip.lastMotionAt = now;
                 activeTrip.destinationLabel = activeTrip.destinationLabel ?? activeTarget?.label ?? null;
                 activeTrip.maxSpeedKph = Math.max(activeTrip.maxSpeedKph ?? 0, speedKph);
                 const nextSampleCount = (activeTrip.motionSampleCount ?? 0) + 1;
@@ -648,12 +727,14 @@ export const useOSStore = create<OSState>()(
           }
 
           if (!isMoving && nextTrips.length && !nextTrips[nextTrips.length - 1].endTime) {
-            nextTrips[nextTrips.length - 1].endTime = now;
+            const activeTrip = nextTrips[nextTrips.length - 1];
+            activeTrip.idleStartedAt = activeTrip.idleStartedAt ?? now;
+            finalizeIdleTrip(activeTrip, now);
           }
 
           return {
             currentPos: pos,
-            currentSpeed: speed,
+            currentSpeed: speedMps,
             currentHeading: finalHeading,
             totalDistanceKm: nextTotalDistanceKm,
             kmCoinBalance: nextKmCoinBalance,
@@ -1094,6 +1175,7 @@ export const useOSStore = create<OSState>()(
         return {
           ...mergedState,
           settings: normalizeSettings(mergedState.settings),
+          trips: normalizeTrips(mergedState.trips),
         };
       },
     }

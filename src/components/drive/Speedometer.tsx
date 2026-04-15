@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { formatSpeed, haversineDistance } from '@/lib/drive-utils';
+import React, { useEffect } from 'react';
+import { formatSpeed } from '@/lib/drive-utils';
 import { Navigation } from 'lucide-react';
 import { useOSStore } from '@/store/use-os-store';
 import { cn } from '@/lib/utils';
@@ -7,7 +7,6 @@ import { motion, useSpring, useMotionValue, useTransform, type MotionValue } fro
 import { useIsLandscapeMobile } from '@/hooks/use-landscape-mobile';
 import { getWidgetSkinById } from '@/lib/cosmetic-market';
 export function Speedometer() {
-  const currentPos = useOSStore((s) => s.currentPos);
   const currentSpeed = useOSStore((s) => s.currentSpeed);
   const units = useOSStore((s) => s.settings.units);
   const activeWidgetSkinId = useOSStore((s) => s.activeWidgetSkinId);
@@ -20,25 +19,10 @@ export function Speedometer() {
     mass: 1
   });
   const displaySpeed = useTransform(smoothSpeed, (latest) => Math.round(latest));
-  const prevRef = useRef<{ pos: [number, number]; ts: number } | null>(null);
+
   useEffect(() => {
-    if (!currentPos) return;
-    const now = Date.now();
-    let computedSpeed = currentSpeed || 0;
-    if (prevRef.current) {
-      const prev = prevRef.current;
-      const dt = (now - prev.ts) / 1000;
-      if (dt > 0.4 && dt < 8) {
-        const dist = haversineDistance(currentPos[0], currentPos[1], prev.pos[0], prev.pos[1]);
-        const calcSpeed = dist / dt;
-        // Faster smoothing to reduce lag during acceleration
-        computedSpeed = (computedSpeed * 0.4) + (calcSpeed * 0.6);
-      }
-    }
-    const targetConverted = formatSpeed(computedSpeed, units);
-    speedValue.set(targetConverted);
-    prevRef.current = { pos: currentPos, ts: now };
-  }, [currentPos, currentSpeed, units, speedValue]);
+    speedValue.set(formatSpeed(currentSpeed ?? 0, units));
+  }, [currentSpeed, units, speedValue]);
 
   const widgetTone = activeWidgetSkin?.style === 'retro'
     ? {

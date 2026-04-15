@@ -6,15 +6,26 @@ import { useShallow } from 'zustand/react/shallow';
 import { useOSStore } from '@/store/use-os-store';
 import { getCategoryColor, getMapStyle, getMapFilter } from '@/lib/nav-utils';
 import type { GeoJSON } from 'geojson';
-import { X, Navigation, Share2, Compass, Globe, Search, ExternalLink, Route, Timer, Gauge } from 'lucide-react';
+import { X, Navigation, Share2, Compass, Globe, Search, ExternalLink, Route, Timer, Gauge, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useIsLandscapeMobile } from '@/hooks/use-landscape-mobile';
-import { formatDriveDistance, formatDriveDuration, getLiveDriveTrip, getPathGeoJson, getTripDurationMs } from '@/lib/live-drive';
+import {
+  formatDriveDistance,
+  formatDriveDuration,
+  formatTripRetentionRemaining,
+  formatTripSpeed,
+  getLiveDriveTrip,
+  getLiveDriveTripHistory,
+  getPathGeoJson,
+  getTripDurationMs,
+  getTripRetentionRemainingMs,
+} from '@/lib/live-drive';
 import { formatRouteDistance, formatRouteMinutes, getNavigationAlert } from '@/lib/navigation-status';
 import { isEmbeddedWebViewAvailable, openEmbeddedWebView } from '@/lib/embedded-web-view';
-import { getGoogleMapsEmbedUrl, getGoogleMapsLink, getGoogleMapsPreviewUrl } from '@/lib/drive-utils';
+import { formatSpeed, getGoogleMapsEmbedUrl, getGoogleMapsLink, getGoogleMapsPreviewUrl } from '@/lib/drive-utils';
 import { useDriveSessionState, useNavigationMapShellState } from '@/store/os-domain-hooks';
+import type { TripRecord } from '@/store/use-os-store';
 
 const TrackingOverlay = lazy(() => import('./TrackingOverlay').then((module) => ({ default: module.TrackingOverlay })));
 const SearchOverlay = lazy(() => import('./SearchOverlay').then((module) => ({ default: module.SearchOverlay })));
@@ -26,7 +37,6 @@ const MAP_CAMERA_TOP_DOWN_UPDATE_INTERVAL_MS = 1000;
 const MAP_CAMERA_MIN_POSITION_DELTA = 0.000025;
 const MAP_CAMERA_TOP_DOWN_MIN_POSITION_DELTA = 0.00006;
 const MAP_CAMERA_MIN_HEADING_DELTA = 6;
-const GOOGLE_MAP_RECENTER_DELTA = 0.0015;
 
 function getHeadingDelta(previous: number | null | undefined, next: number | null | undefined) {
   if (previous == null || next == null) {
@@ -37,8 +47,27 @@ function getHeadingDelta(previous: number | null | undefined, next: number | nul
   return Math.min(rawDelta, 360 - rawDelta);
 }
 
+function formatTripTimestamp(timestamp: number) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(timestamp);
+}
+
+function renderTripClockRange(trip: TripRecord) {
+  const startedAt = formatTripTimestamp(trip.startTime);
+  if (!trip.endTime) {
+    return `Started ${startedAt}`;
+  }
+
+  return `${startedAt} to ${formatTripTimestamp(trip.endTime)}`;
+}
+
 export const MapView = React.memo(function MapView() {
   const { isMapOpen, closeMap, isFollowing, setFollowing, currentPos, currentHeading } = useNavigationMapShellState();
+  const currentSpeed = useOSStore((state) => state.currentSpeed);
   const {
     gpsStatus,
     activeRoute,
@@ -79,6 +108,7 @@ export const MapView = React.memo(function MapView() {
   const { trips, units } = useDriveSessionState();
   const mapRef = useRef<MapRef | null>(null);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const googlePreviewSeededRef = useRef(false);
   const lastCameraSyncRef = useRef<{
     timestamp: number;
     position: [number, number] | null;
@@ -98,6 +128,7 @@ export const MapView = React.memo(function MapView() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [googleMapCenter, setGoogleMapCenter] = useState<[number, number] | null>(currentPos);
   const [isLiveDrivePanelHidden, setIsLiveDrivePanelHidden] = useState(false);
+  const [isTripHistoryHidden, setIsTripHistoryHidden] = useState(false);
   const navigationAlert = useMemo(() => getNavigationAlert({
     gpsStatus,
     routeState,
@@ -108,9 +139,13 @@ export const MapView = React.memo(function MapView() {
     activeRoute,
   }), [gpsStatus, routeState, routeFailureKind, routeFailureMessage, lastGpsFixAt, activeDestination, activeRoute]);
   const liveDriveTrip = useMemo(() => getLiveDriveTrip(trips), [trips]);
+  const liveDriveHistory = useMemo(() => getLiveDriveTripHistory(trips), [trips]);
   const shouldShowLiveDrive = Boolean(!activeDestination && !discoveredPlace && liveDriveTrip);
+  const shouldShowTripHistory = liveDriveHistory.length > 0;
   const showLiveDrivePanel = shouldShowLiveDrive && !isLiveDrivePanelHidden;
+  const showTripHistoryPanel = shouldShowTripHistory && !isTripHistoryHidden;
   const liveDriveDurationMs = liveDriveTrip ? getTripDurationMs(liveDriveTrip) : 0;
+  const mapSpeed = useMemo(() => formatSpeed(currentSpeed ?? 0, units), [currentSpeed, units]);
   const useGooglePreview = mapProvider === 'google' && !shouldShowLiveDrive;
   const canOpenNativeGoogleFullscreen = useGooglePreview && isEmbeddedWebViewAvailable();
   const liveDrivePanelSessionKey = liveDriveTrip ? `${liveDriveTrip.startTime}:${liveDriveTrip.endTime ?? 'active'}` : 'none';
@@ -119,10 +154,18 @@ export const MapView = React.memo(function MapView() {
     return getPathGeoJson(liveDriveTrip);
   }, [liveDriveTrip, shouldShowLiveDrive]);
   const mapCarFallbackClassName = isLandscapeMobile ? 'h-[66px] w-[66px]' : 'h-[88px] w-[88px]';
+  const mapStyle = useMemo(() => getMapStyle(mapTheme), [mapTheme]);
+  const mapFilter = useMemo(() => getMapFilter(mapTheme), [mapTheme]);
 
   useEffect(() => {
     setIsLiveDrivePanelHidden(false);
   }, [liveDrivePanelSessionKey, activeDestination?.id, discoveredPlace?.id]);
+
+  useEffect(() => {
+    if (liveDriveHistory.length) {
+      setIsTripHistoryHidden(false);
+    }
+  }, [liveDriveHistory.length, liveDriveHistory[0]?.startTime]);
 
   useEffect(() => {
     if (useGooglePreview) {
@@ -175,29 +218,29 @@ export const MapView = React.memo(function MapView() {
 
   useEffect(() => {
     if (!isMapOpen || !useGooglePreview) {
+      googlePreviewSeededRef.current = false;
       return;
     }
 
-    if (discoveredPlace) {
-      setGoogleMapCenter([discoveredPlace.lat, discoveredPlace.lon]);
+    const focusPlace = discoveredPlace ?? activeDestination;
+
+    if (focusPlace) {
+      setGoogleMapCenter([focusPlace.lat, focusPlace.lon]);
+      googlePreviewSeededRef.current = true;
       return;
     }
 
-    if (activeDestination) {
-      setGoogleMapCenter([activeDestination.lat, activeDestination.lon]);
+    googlePreviewSeededRef.current = false;
+  }, [activeDestination, discoveredPlace, isMapOpen, useGooglePreview]);
+
+  useEffect(() => {
+    if (!isMapOpen || !useGooglePreview || googlePreviewSeededRef.current || !currentPos) {
       return;
     }
 
-    if (currentPos && (isFollowing || !googleMapCenter)) {
-      if (
-        !googleMapCenter
-        || Math.abs(currentPos[0] - googleMapCenter[0]) >= GOOGLE_MAP_RECENTER_DELTA
-        || Math.abs(currentPos[1] - googleMapCenter[1]) >= GOOGLE_MAP_RECENTER_DELTA
-      ) {
-        setGoogleMapCenter(currentPos);
-      }
-    }
-  }, [activeDestination, currentPos, discoveredPlace, googleMapCenter, isFollowing, isMapOpen, useGooglePreview]);
+    setGoogleMapCenter(currentPos);
+    googlePreviewSeededRef.current = true;
+  }, [currentPos, isMapOpen, useGooglePreview]);
 
   useEffect(() => {
     return () => {
@@ -230,8 +273,8 @@ export const MapView = React.memo(function MapView() {
 
   useEffect(() => {
     const map = mapRef.current?.getMap();
-    if (map) map.getCanvas().style.filter = getMapFilter(mapTheme);
-  }, [mapTheme, isMapOpen]);
+    if (map) map.getCanvas().style.filter = mapFilter;
+  }, [isMapOpen, mapFilter]);
 
   useEffect(() => {
     if (!isMapOpen || useGooglePreview || !mapRef.current) {
@@ -247,7 +290,6 @@ export const MapView = React.memo(function MapView() {
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
     inactivityTimerRef.current = setTimeout(() => setFollowing(true), 15000);
   };
-  const mapStyle = useMemo(() => getMapStyle(mapTheme), [mapTheme]);
   const googleMapUrl = useMemo(() => {
     const focusPlace = discoveredPlace ?? activeDestination;
     const zoom = mapPerspective === 'driving' ? 17 : 15;
@@ -339,18 +381,18 @@ export const MapView = React.memo(function MapView() {
       {useGooglePreview ? (
         <div className="absolute inset-0 bg-black overscroll-none">
           <iframe
-            key={googleMapUrl}
             src={googleMapUrl}
             title="Google Maps Preview"
             className="h-full w-full border-0"
             referrerPolicy="no-referrer-when-downgrade"
             allowFullScreen
-            style={{ filter: getMapFilter(mapTheme) }}
+            style={{ filter: mapFilter }}
           />
         </div>
       ) : (
         <Map
           ref={mapRef}
+          reuseMaps
           initialViewState={{
             longitude: currentPos ? currentPos[1] : -74.006,
             latitude: currentPos ? currentPos[0] : 40.7128,
@@ -442,7 +484,7 @@ export const MapView = React.memo(function MapView() {
                 isLandscapeMobile ? 'h-10 rounded-xl px-3 text-[10px]' : 'h-12 rounded-2xl px-4 text-[11px] md:h-16 md:rounded-[1.5rem] md:px-5'
               )}
             >
-              Show Live Drive
+              Open Drive Panel
             </Button>
           )}
           <AnimatePresence mode="wait">
@@ -492,7 +534,8 @@ export const MapView = React.memo(function MapView() {
                     onClick={() => setIsLiveDrivePanelHidden(true)}
                     className="inline-flex h-8 items-center rounded-full border border-white/15 bg-white/5 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-white/75 transition-colors hover:bg-white/10 hover:text-white"
                   >
-                    Hide
+                    <X className="mr-1 h-3.5 w-3.5" />
+                    Close Panel
                   </button>
                 </div>
                 <span className="mt-2 text-[11px] md:text-sm text-white/72 max-w-[340px]">
@@ -500,6 +543,11 @@ export const MapView = React.memo(function MapView() {
                     ? 'No destination was pinned, so VelocityOS kept the breadcrumb trail of the path you actually drove.'
                     : 'No point of interest is armed, so VelocityOS is tracing your exact path in real time.'}
                 </span>
+                {liveDriveTrip?.endTime && (
+                  <span className="mt-2 text-[10px] md:text-xs font-bold uppercase tracking-[0.18em] text-emerald-200/65">
+                    Auto deletes in {formatTripRetentionRemaining(getTripRetentionRemainingMs(liveDriveTrip))}
+                  </span>
+                )}
                 <div className="mt-3 grid grid-cols-3 gap-2 md:gap-3">
                   <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
                     <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55 flex items-center gap-1.5">
@@ -550,6 +598,125 @@ export const MapView = React.memo(function MapView() {
             <Share2 className={actionIconClass} />
           </Button>
         </div>
+      </div>
+      <div className={cn(
+        "absolute z-[108] flex flex-col items-start",
+        isLandscapeMobile ? 'bottom-2 left-2 max-w-[76vw] gap-2' : 'bottom-6 left-6 max-w-[28rem] gap-4'
+      )}>
+        <div className={cn(
+          "pointer-events-none rounded-2xl border border-white/10 bg-zinc-950/45 text-white shadow-[0_18px_50px_-28px_rgba(0,0,0,0.9)] backdrop-blur-xl",
+          isLandscapeMobile ? 'px-3 py-2' : 'px-4 py-3'
+        )}>
+          <div className="text-[9px] font-black uppercase tracking-[0.22em] text-white/55">Map Speed</div>
+          <div className="mt-1 flex items-end gap-2">
+            <span className={cn('font-black tabular-nums leading-none text-white/88', isLandscapeMobile ? 'text-3xl' : 'text-5xl')}>
+              {mapSpeed}
+            </span>
+            <span className={cn('pb-1 font-black uppercase tracking-[0.22em] text-white/55', isLandscapeMobile ? 'text-[10px]' : 'text-xs')}>
+              {units}
+            </span>
+          </div>
+        </div>
+        {shouldShowTripHistory && isTripHistoryHidden && (
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={() => setIsTripHistoryHidden(false)}
+            className={cn(
+              "bg-zinc-950/88 backdrop-blur-3xl border border-cyan-300/20 text-cyan-50 shadow-glow active:scale-95 transition-transform font-black uppercase tracking-[0.18em]",
+              isLandscapeMobile ? 'h-10 rounded-xl px-3 text-[10px]' : 'h-12 rounded-2xl px-4 text-[11px]'
+            )}
+          >
+            Open Trip History
+          </Button>
+        )}
+        <AnimatePresence>
+          {showTripHistoryPanel && (
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 18 }}
+              className={cn(
+                "w-full rounded-[1.6rem] border border-cyan-300/16 bg-zinc-950/82 p-3 text-white shadow-[0_30px_80px_-42px_rgba(0,0,0,0.95)] backdrop-blur-3xl",
+                isLandscapeMobile ? 'max-w-[76vw]' : 'max-w-[28rem] p-4'
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-100/70">
+                    <History className="h-3.5 w-3.5" /> Untethered Trips
+                  </div>
+                  <div className="mt-1 text-sm font-black text-white md:text-base">Map-tab trip history with 30-day expiry.</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsTripHistoryHidden(true)}
+                  className="inline-flex h-8 items-center rounded-full border border-white/15 bg-white/5 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                  <X className="mr-1 h-3.5 w-3.5" />
+                  Close History
+                </button>
+              </div>
+              <div className="mt-2 text-[11px] text-white/58">
+                VelocityOS keeps untethered drives for 30 days, then removes each one automatically.
+              </div>
+              <div className={cn('mt-3 space-y-2 overflow-y-auto pr-1', isLandscapeMobile ? 'max-h-[30vh]' : 'max-h-[38vh]')}>
+                {liveDriveHistory.map((trip) => {
+                  const retentionLabel = formatTripRetentionRemaining(getTripRetentionRemainingMs(trip));
+                  const durationMs = getTripDurationMs(trip);
+
+                  return (
+                    <div key={trip.startTime} className="rounded-[1.35rem] border border-white/10 bg-white/5 px-3 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/48">Drive Log</div>
+                          <div className="mt-1 text-sm font-black text-white md:text-base">{renderTripClockRange(trip)}</div>
+                        </div>
+                        <div className="rounded-full border border-cyan-300/18 bg-cyan-400/8 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/78">
+                          {retentionLabel}
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <div className="rounded-2xl border border-white/10 bg-black/15 px-3 py-2.5">
+                          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">
+                            <Route className="h-3.5 w-3.5" /> Distance
+                          </div>
+                          <div className="mt-1 text-sm font-black tabular-nums text-white md:text-base">
+                            {formatDriveDistance(trip.distanceKm, units)}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-black/15 px-3 py-2.5">
+                          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">
+                            <Timer className="h-3.5 w-3.5" /> Duration
+                          </div>
+                          <div className="mt-1 text-sm font-black tabular-nums text-white md:text-base">
+                            {formatDriveDuration(durationMs)}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-black/15 px-3 py-2.5">
+                          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">
+                            <Gauge className="h-3.5 w-3.5" /> Avg Speed
+                          </div>
+                          <div className="mt-1 text-sm font-black tabular-nums text-white md:text-base">
+                            {formatTripSpeed(trip.averageSpeedKph, units)}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-black/15 px-3 py-2.5">
+                          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">
+                            <Gauge className="h-3.5 w-3.5" /> Max Speed
+                          </div>
+                          <div className="mt-1 text-sm font-black tabular-nums text-white md:text-base">
+                            {formatTripSpeed(trip.maxSpeedKph, units)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
       <div className={cn(
         "absolute z-[110] flex flex-col",

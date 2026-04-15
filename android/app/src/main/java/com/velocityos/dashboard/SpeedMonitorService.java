@@ -2,11 +2,11 @@ package com.velocityos.dashboard;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
-import android.app.ActivityManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.Context;
 import android.app.Service;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -110,6 +110,10 @@ public class SpeedMonitorService extends Service implements LocationListener {
             return;
         }
 
+        if (isAppInForeground()) {
+            dismissAlertNotification(this);
+        }
+
         final long sampleElapsedMs = SystemClock.elapsedRealtime();
         final float speedMps = resolveSpeedMps(location, sampleElapsedMs);
         updateSpeedReference(location, sampleElapsedMs);
@@ -141,6 +145,7 @@ public class SpeedMonitorService extends Service implements LocationListener {
         }
 
         if (isAppInForeground()) {
+            dismissAlertNotification(this);
             Log.d(TAG, "Speed threshold exceeded but app is already foreground");
             return;
         }
@@ -211,7 +216,7 @@ public class SpeedMonitorService extends Service implements LocationListener {
 
     private void launchDashboardForSpeedAlert(float speedKph, @NonNull MonitorPreferences.Config config) {
         final Intent launchIntent = new Intent(this, MainActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 .putExtra("velocityos_speed_alert_kph", speedKph)
                 .putExtra("velocityos_speed_alert_ts", System.currentTimeMillis());
 
@@ -255,6 +260,10 @@ public class SpeedMonitorService extends Service implements LocationListener {
         } catch (Exception ex) {
             Log.w(TAG, "Unable to launch activity directly from background", ex);
         }
+    }
+
+    public static void dismissAlertNotification(@NonNull Context context) {
+        NotificationManagerCompat.from(context).cancel(ALERT_NOTIFICATION_ID);
     }
 
     private Notification buildServiceNotification() {
@@ -364,9 +373,6 @@ public class SpeedMonitorService extends Service implements LocationListener {
     }
 
     private boolean isAppInForeground() {
-        ActivityManager.RunningAppProcessInfo processInfo = new ActivityManager.RunningAppProcessInfo();
-        ActivityManager.getMyMemoryState(processInfo);
-        return processInfo.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
-                || processInfo.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE;
+        return MainActivity.isAppVisible();
     }
 }

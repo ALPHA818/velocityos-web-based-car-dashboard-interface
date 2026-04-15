@@ -133,10 +133,10 @@ export const getCategoryColor = (category: string) => {
 };
 export const getMapFilter = (theme: string): string => {
   switch (theme) {
-    case 'dark': return 'sepia(0) contrast(1.25) brightness(0.58) invert(0.85) hue-rotate(160deg)';
-    case 'highway': return 'contrast(1.6) saturate(2) hue-rotate(220deg) brightness(1.2) contrast(1.8)';
-    case 'vibrant': return 'saturate(2.2) contrast(1.4) brightness(1.1) hue-rotate(5deg)';
-    case 'offline': return 'grayscale(1) saturate(0) brightness(0.6)';
+    case 'dark': return 'invert(0.9) hue-rotate(180deg) saturate(0.7) brightness(0.72) contrast(0.96)';
+    case 'highway': return 'invert(0.92) hue-rotate(180deg) saturate(0.82) brightness(0.78) contrast(1.02)';
+    case 'vibrant': return 'saturate(1.18) contrast(1.04) brightness(1.02)';
+    case 'offline': return 'grayscale(1) saturate(0) brightness(0.68)';
     default: return 'none';
   }
 };

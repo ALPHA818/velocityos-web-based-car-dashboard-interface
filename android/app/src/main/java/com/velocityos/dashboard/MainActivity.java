@@ -19,6 +19,11 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
 	private static final int SPEED_MONITOR_PERMISSION_REQUEST_CODE = 4103;
+	private static volatile boolean appVisible = false;
+
+	public static boolean isAppVisible() {
+		return appVisible;
+	}
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -27,16 +32,38 @@ public class MainActivity extends BridgeActivity {
 		registerPlugin(NativeTtsPlugin.class);
 		super.onCreate(savedInstanceState);
 		applyImmersiveMode();
+		SpeedMonitorService.dismissAlertNotification(this);
 		ensureRuntimePermissions();
 		ensureSpeedMonitorRunning();
 	}
 
 	@Override
+	public void onStart() {
+		super.onStart();
+		appVisible = true;
+		SpeedMonitorService.dismissAlertNotification(this);
+	}
+
+	@Override
 	public void onResume() {
 		super.onResume();
+		appVisible = true;
 		applyImmersiveMode();
+		SpeedMonitorService.dismissAlertNotification(this);
 		ensureRuntimePermissions();
 		ensureSpeedMonitorRunning();
+	}
+
+	@Override
+	public void onStop() {
+		appVisible = false;
+		super.onStop();
+	}
+
+	@Override
+	public void onDestroy() {
+		appVisible = false;
+		super.onDestroy();
 	}
 
 	@Override
