@@ -51,25 +51,33 @@ public class SpeedMonitorService extends Service implements LocationListener {
     private long lastAlertElapsedMs = 0L;
     private int consecutiveOverspeedSamples = 0;
     private boolean thresholdAlertLatched = false;
+    private boolean foregroundStarted = false;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.i(TAG, "onCreate - initializing foreground service");
+        Log.i(TAG, "onCreate - initializing speed monitor service");
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
         createNotificationChannels();
-        startForeground(SERVICE_NOTIFICATION_ID, buildServiceNotification());
+        dismissAlertNotification(this);
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         MonitorPreferences.Config config = MonitorPreferences.getConfig(this);
-        if (!config.enabled) {
-            stopSelf();
+        if (!config.enabled || !MonitorPreferences.hasLocationPermission(this)) {
+            removeLocationUpdates();
+            if (foregroundStarted) {
+                stopForeground(STOP_FOREGROUND_REMOVE);
+                foregroundStarted = false;
+            }
+            stopSelfResult(startId);
             return START_NOT_STICKY;
         }
 
+        ensureForegroundStarted();
         Log.i(TAG, "onStartCommand - requesting location updates");
+        dismissAlertNotification(this);
         requestLocationUpdatesIfPermitted();
         return START_STICKY;
     }
@@ -84,6 +92,7 @@ public class SpeedMonitorService extends Service implements LocationListener {
     public void onDestroy() {
         super.onDestroy();
         removeLocationUpdates();
+        foregroundStarted = false;
     }
 
     @Override
@@ -152,7 +161,7 @@ public class SpeedMonitorService extends Service implements LocationListener {
 
         lastAlertElapsedMs = now;
         thresholdAlertLatched = true;
-        Log.i(TAG, "Speed threshold exceeded in background: " + speedKph + " km/h. Triggering launch.");
+        Log.i(TAG, "Speed threshold exceeded in background: " + speedKph + " km/h. Posting reminder.");
         launchDashboardForSpeedAlert(speedKph, config);
     }
 
@@ -229,41 +238,30 @@ public class SpeedMonitorService extends Service implements LocationListener {
 
         final Notification alertNotification = new NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_dialog_map)
-                .setContentTitle("VelocityOS speed alert")
-            .setContentText("Speed over " + Math.round(config.thresholdKph) + " km/h detected. Opening dashboard.")
+                .setContentTitle("Velocity speed reminder")
+                .setContentText("Speed over " + Math.round(config.thresholdKph) + " km/h detected. Tap to return to the app.")
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
                 .setAutoCancel(true)
                 .setContentIntent(launchPendingIntent)
-                .setFullScreenIntent(launchPendingIntent, true)
                 .build();
 
         if (canPostNotifications()) {
             NotificationManagerCompat.from(this).notify(ALERT_NOTIFICATION_ID, alertNotification);
         }
-
-        boolean allowDirectLaunch = !config.strictAutoOpen || MonitorPreferences.hasStrictAutoOpenPrivileges(this);
-        if (!allowDirectLaunch) {
-            Log.w(TAG, "Strict auto-open enabled without device-owner/default-launcher privilege; showing alert only");
-            return;
-        }
-
-        try {
-            launchPendingIntent.send();
-        } catch (Exception ex) {
-            Log.w(TAG, "PendingIntent send failed for launch", ex);
-        }
-
-        try {
-            Log.i(TAG, "Attempting direct activity launch from service");
-            startActivity(launchIntent);
-        } catch (Exception ex) {
-            Log.w(TAG, "Unable to launch activity directly from background", ex);
-        }
     }
 
     public static void dismissAlertNotification(@NonNull Context context) {
         NotificationManagerCompat.from(context).cancel(ALERT_NOTIFICATION_ID);
+    }
+
+    private void ensureForegroundStarted() {
+        if (foregroundStarted) {
+            return;
+        }
+
+        startForeground(SERVICE_NOTIFICATION_ID, buildServiceNotification());
+        foregroundStarted = true;
     }
 
     private Notification buildServiceNotification() {
@@ -279,8 +277,8 @@ public class SpeedMonitorService extends Service implements LocationListener {
 
         return new NotificationCompat.Builder(this, SERVICE_CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_dialog_map)
-                .setContentTitle("VelocityOS monitoring")
-                .setContentText("Monitoring speed for automatic dashboard launch")
+                .setContentTitle("Velocity monitoring")
+                .setContentText("Monitoring speed for optional app reminders")
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
                 .setOnlyAlertOnce(true)

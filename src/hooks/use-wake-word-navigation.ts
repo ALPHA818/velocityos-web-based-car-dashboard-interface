@@ -91,7 +91,7 @@ function extractCommand(transcript: string, wakeWord: string): string | null {
 
 function routeCommand(command: string): string | null {
   if (/\b(home|dashboard)\b/.test(command)) return '/';
-  if (/\b(app|apps|launcher)\b/.test(command)) return '/apps';
+  if (/\b(app|apps)\b/.test(command)) return '/apps';
   if (/\b(media|music|player)\b/.test(command)) return '/media';
   if (/\b(settings|setting)\b/.test(command)) return '/settings';
   if (/\b(navigation|navigate|maps?)\b/.test(command)) return '/navigation';

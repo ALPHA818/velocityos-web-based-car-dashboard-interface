@@ -47,21 +47,21 @@ export const INTEGRATION_PRESETS: Record<IntegratedAppId, AppIntegrationPreset> 
     webUrl: 'https://web.whatsapp.com/',
     supportsEmbed: true,
     autoConnect: true,
-    helperText: 'Open WhatsApp in a preview window inside VelocityOS, expand it to full screen, or launch native WhatsApp.',
+    helperText: 'Open WhatsApp in a preview window inside Velocity, expand it to full screen, or launch native WhatsApp.',
   },
   spotify: {
     launchUrl: 'spotify:',
     webUrl: 'https://open.spotify.com/',
     supportsEmbed: true,
     autoConnect: true,
-    helperText: 'Open Spotify in a preview window inside VelocityOS, expand it to full screen, or launch native Spotify.',
+    helperText: 'Open Spotify in a preview window inside Velocity, expand it to full screen, or launch native Spotify.',
   },
   youtubeMusic: {
     launchUrl: 'vnd.youtube.music://',
     webUrl: 'https://music.youtube.com/',
     supportsEmbed: true,
     autoConnect: true,
-    helperText: 'Open YouTube Music in a preview window inside VelocityOS, expand it to full screen, or launch native YT Music.',
+    helperText: 'Open YouTube Music in a preview window inside Velocity, expand it to full screen, or launch native YT Music.',
   },
 };
 
@@ -155,7 +155,7 @@ export async function openConnectedAppInsideApp(
       route: window.location.pathname,
       metadata: { integrationId, presentation },
     });
-    toast.error('Set a web URL before opening this integration inside VelocityOS.');
+    toast.error('Set a web URL before opening this integration inside Velocity.');
     return;
   }
 
@@ -171,7 +171,7 @@ export async function openConnectedAppInsideApp(
         recordTelemetryEvent({
           type: 'integration-launch',
           level: 'info',
-          message: 'Integration opened inside VelocityOS.',
+          message: 'Integration opened inside Velocity.',
           route: window.location.pathname,
           metadata: { integrationId, presentation, mode: 'embedded-web-view' },
         });
@@ -236,7 +236,7 @@ export function launchConnectedApp(integration: AppIntegrationState): void {
     recordTelemetryEvent({
       type: 'integration-launch-failure',
       level: 'warning',
-      message: 'Native integration launch did not hide the app, so VelocityOS used the web fallback.',
+      message: 'Native integration launch did not hide the app, so Velocity used the web fallback.',
       route: window.location.pathname,
       metadata: { integrationId },
     });

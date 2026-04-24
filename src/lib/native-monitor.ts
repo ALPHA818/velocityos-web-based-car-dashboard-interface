@@ -34,7 +34,7 @@ export const NATIVE_MONITOR_LIMITS = {
 };
 
 const DEFAULT_CONFIG: NativeMonitorConfig = {
-  enabled: true,
+  enabled: false,
   thresholdKph: 40,
   cooldownSeconds: 15,
   strictAutoOpen: false,
@@ -177,7 +177,7 @@ export function summarizeNativeMonitorStatus(config: NativeMonitorConfig | null 
   if (!config) {
     return {
       label: 'Unavailable',
-      detail: 'Native monitor configuration is unavailable right now.',
+      detail: 'Background reminder configuration is unavailable right now.',
       tone: 'warning',
     };
   }
@@ -185,22 +185,14 @@ export function summarizeNativeMonitorStatus(config: NativeMonitorConfig | null 
   if (!config.enabled) {
     return {
       label: 'Disabled',
-      detail: 'Speed-triggered reopening is turned off for this device.',
+      detail: 'Background speed reminders are turned off for this device.',
       tone: 'inactive',
-    };
-  }
-
-  if (config.strictAutoOpen && !config.isDeviceOwner && !config.isDefaultLauncher) {
-    return {
-      label: 'Needs launcher role',
-      detail: 'Strict auto-open is enabled, but launcher or device-owner privileges are still missing.',
-      tone: 'warning',
     };
   }
 
   return {
     label: 'Ready',
-    detail: `Background speed monitor is armed at ${Math.round(config.thresholdKph)} km/h with a ${config.cooldownSeconds}s cooldown.`,
+    detail: `Background speed reminders are armed at ${Math.round(config.thresholdKph)} km/h with a ${config.cooldownSeconds}s cooldown.`,
     tone: 'healthy',
   };
 }

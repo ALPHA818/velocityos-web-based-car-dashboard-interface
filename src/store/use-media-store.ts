@@ -97,12 +97,12 @@ export const MEDIA_SOURCE_OPTIONS: MediaSourceOption[] = [
   {
     id: 'spotify',
     label: 'Spotify',
-    detail: 'Use Spotify in a preview window inside VelocityOS or launch the native app',
+    detail: 'Use Spotify in a preview window inside Velocity or launch the native app',
   },
   {
     id: 'youtubeMusic',
     label: 'YouTube Music',
-    detail: 'Use YouTube Music in a preview window inside VelocityOS or launch the native app',
+    detail: 'Use YouTube Music in a preview window inside Velocity or launch the native app',
   },
 ];
 

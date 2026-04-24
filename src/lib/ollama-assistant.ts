@@ -132,7 +132,7 @@ export function buildOfflineAssistantReply(prompt: string, baseUrl: string): str
   }
 
   if (/\b(settings|voice|microphone|ollama|ai|assistant)\b/.test(normalizedPrompt)) {
-    return `Offline assistant: voice and AI settings live in System Settings. ${getOllamaConnectionHint(baseUrl)}`;
+    return `Offline assistant: voice and AI settings live in Settings. ${getOllamaConnectionHint(baseUrl)}`;
   }
 
   if (/\b(trip|trips|drive|live drive|tracking|share)\b/.test(normalizedPrompt)) {

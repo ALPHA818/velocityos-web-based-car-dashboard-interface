@@ -2,9 +2,13 @@ package com.velocityos.dashboard;
 
 import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -21,7 +25,9 @@ public class NativeMonitorPlugin extends Plugin {
 
     @PluginMethod
     public void getConfig(PluginCall call) {
-        call.resolve(toJsConfig(MonitorPreferences.getConfig(getContext())));
+        MonitorPreferences.Config config = MonitorPreferences.getConfig(getContext());
+        syncServiceState(config.enabled);
+        call.resolve(toJsConfig(config));
     }
 
     @PluginMethod
@@ -52,25 +58,30 @@ public class NativeMonitorPlugin extends Plugin {
             return;
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        List<String> missingForegroundPermissions = new ArrayList<>();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && ActivityCompat.checkSelfPermission(getActivity(), Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            missingForegroundPermissions.add(Manifest.permission.POST_NOTIFICATIONS);
+        }
+
+        if (!hasForegroundLocationPermission()) {
+            missingForegroundPermissions.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        }
+
+        if (!missingForegroundPermissions.isEmpty()) {
             ActivityCompat.requestPermissions(
                     getActivity(),
-                    new String[]{
-                            Manifest.permission.POST_NOTIFICATIONS,
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION,
-                            Manifest.permission.ACCESS_BACKGROUND_LOCATION
-                    },
+                    missingForegroundPermissions.toArray(new String[0]),
                     MONITOR_PLUGIN_PERMISSION_REQUEST_CODE
             );
-        } else {
+            call.resolve();
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasBackgroundLocationPermission()) {
             ActivityCompat.requestPermissions(
                     getActivity(),
-                    new String[]{
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION,
-                            Manifest.permission.ACCESS_BACKGROUND_LOCATION
-                    },
+                    new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION},
                     MONITOR_PLUGIN_PERMISSION_REQUEST_CODE
             );
         }
@@ -107,6 +118,19 @@ public class NativeMonitorPlugin extends Plugin {
         }
 
         getContext().stopService(serviceIntent);
+    }
+
+    private boolean hasForegroundLocationPermission() {
+        return ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean hasBackgroundLocationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return true;
+        }
+
+        return ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
     private JSObject toJsConfig(MonitorPreferences.Config config) {

@@ -172,11 +172,11 @@ function getSummaryTitle(tone: StatusTone) {
     case 'critical':
       return 'Driver attention recommended';
     case 'warning':
-      return 'System health needs a tune-up';
+      return 'App health needs a tune-up';
     case 'inactive':
       return 'Standby systems available';
     default:
-      return 'System health looks stable';
+      return 'App health looks stable';
   }
 }
 
@@ -196,7 +196,7 @@ export function buildSystemStatusSnapshot(input: SystemStatusInput): SystemStatu
     integrationSummary.item,
     {
       id: 'native',
-      label: 'Native monitor',
+      label: 'Background reminder',
       value: nativeMonitor.label,
       detail: nativeMonitor.detail,
       tone: nativeMonitor.tone,

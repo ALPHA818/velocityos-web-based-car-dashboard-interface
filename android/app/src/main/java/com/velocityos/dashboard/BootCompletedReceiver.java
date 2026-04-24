@@ -18,6 +18,10 @@ public class BootCompletedReceiver extends BroadcastReceiver {
             return;
         }
 
+        if (!MonitorPreferences.hasLocationPermission(context)) {
+            return;
+        }
+
         Intent serviceIntent = new Intent(context, SpeedMonitorService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             ContextCompat.startForegroundService(context, serviceIntent);

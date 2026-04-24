@@ -562,7 +562,7 @@ export function MediaPage() {
                   compact
                   eyebrow="Source setup"
                   title="This source needs setup"
-                  message="Connect it in the App Launcher if you want custom deep links, preview preferences, or fullscreen start behavior."
+                  message="Connect it in Apps if you want custom deep links, preview preferences, or fullscreen start behavior."
                   primaryAction={{ label: 'Open Apps', onClick: () => navigate('/apps') }}
                   className={cn(widgetTone.softCard, widgetTone.subtitle)}
                 />
@@ -573,7 +573,7 @@ export function MediaPage() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className={cn('uppercase tracking-wide font-black', widgetTone.subtitle, isLandscapeMobile ? 'text-[10px]' : 'text-xs')}>
-                        Inside VelocityOS
+                        Inside Velocity
                       </div>
                       <div className={cn('font-bold', widgetTone.title, isLandscapeMobile ? 'text-sm mt-1' : 'text-lg mt-1')}>
                         {activeIntegrationTitle} opens over the dashboard
@@ -622,10 +622,10 @@ export function MediaPage() {
                   )}>
                     <div className={cn('rounded-[1.5rem] border', widgetTone.softCard, isLandscapeMobile ? 'p-4' : 'p-5')}>
                       <div className={cn('font-black tracking-tight', widgetTone.title, isLandscapeMobile ? 'text-lg' : 'text-2xl')}>
-                        Open {activeIntegrationTitle} inside VelocityOS
+                        Open {activeIntegrationTitle} inside Velocity
                       </div>
                       <div className={cn('mt-2', widgetTone.subtitle, isLandscapeMobile ? 'text-[11px]' : 'text-sm')}>
-                        Music providers often block iframe playback. VelocityOS opens the selected source in a native preview window over the dashboard instead, so sign-in, browsing, and playback keep working while still giving you a fullscreen toggle on the preview toolbar.
+                        Music providers often block iframe playback. Velocity opens the selected source in a native preview window over the dashboard instead, so sign-in, browsing, and playback keep working while still giving you a fullscreen toggle on the preview toolbar.
                       </div>
                     </div>
                     <div className={cn('grid', isLandscapeMobile ? 'grid-cols-1 gap-2' : 'grid-cols-3 gap-3')}>
@@ -639,7 +639,7 @@ export function MediaPage() {
                       </div>
                       <div className={cn('rounded-2xl border p-3', widgetTone.softCard)}>
                         <div className={cn('text-[10px] uppercase tracking-wide font-black', widgetTone.subtitle)}>3. Return</div>
-                        <div className="mt-2 text-sm">Close the preview to drop straight back into VelocityOS exactly where you left off.</div>
+                        <div className="mt-2 text-sm">Close the preview to drop straight back into Velocity exactly where you left off.</div>
                       </div>
                     </div>
                   </div>
@@ -655,7 +655,7 @@ export function MediaPage() {
                   title={activeWebUrl ? 'Preview panel is hidden' : 'Preview URL is missing'}
                   message={activeWebUrl
                     ? 'Enable Show Preview Panel to keep preview and fullscreen controls ready for this music source.'
-                    : 'Add a web URL in the App Launcher before trying to preview this source inside VelocityOS.'}
+                    : 'Add a web URL in Apps before trying to preview this source inside Velocity.'}
                   primaryAction={activeWebUrl
                     ? {
                         label: activeIntegration?.embedInPanel ? 'Preview Ready' : 'Show Preview Panel',

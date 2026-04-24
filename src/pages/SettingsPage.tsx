@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CarLayout } from '@/components/layout/CarLayout';
 import { useOSStore } from '@/store/use-os-store';
-import { Ruler, LogOut, Info, Download, CheckCircle, XCircle, Sun, Moon, Sparkles, Navigation, Zap, Globe, Layers, Gauge, ShieldAlert, ShieldCheck, Bot, Mic, Play, Server, Square, Volume2 } from 'lucide-react';
+import { Ruler, LogOut, Info, Download, CheckCircle, XCircle, Sun, Moon, Sparkles, Navigation, Zap, Globe, Layers, Gauge, Bot, Mic, Play, Server, Square, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -18,7 +18,6 @@ import {
   isNativeMonitorPluginAvailable,
   NATIVE_MONITOR_LIMITS,
   openNativeMonitorAppSettings,
-  openNativeMonitorHomeSettings,
   requestNativeMonitorPermissions,
   setNativeMonitorConfig,
   type NativeMonitorConfig,
@@ -355,13 +354,6 @@ export function SettingsPage() {
     }
   };
 
-  const handleOpenHomeSettings = async () => {
-    const opened = await openNativeMonitorHomeSettings();
-    if (!opened) {
-      toast.error('Home app settings are only available on Android');
-    }
-  };
-
   const handleOpenAppSettings = async () => {
     const opened = await openNativeMonitorAppSettings();
     if (!opened) {
@@ -369,14 +361,12 @@ export function SettingsPage() {
     }
   };
 
-  const strictPrivilegeReady = Boolean(monitorConfig?.isDeviceOwner || monitorConfig?.isDefaultLauncher);
-
   const handleReset = async () => {
     try {
       await resetSystem();
-      toast.success('System reset complete');
+      toast.success('App reset complete');
     } catch (err) {
-      toast.error('Failed to reset system');
+      toast.error('Failed to reset app data');
     }
   };
   return (
@@ -388,8 +378,8 @@ export function SettingsPage() {
       )}>
         <div className="pointer-events-none absolute inset-x-0 top-0 h-52 opacity-80 blur-3xl" style={{ background: `radial-gradient(circle at 16% 18%, ${activeScene?.accent ?? activeWidgetSkin?.accent ?? 'rgba(59,130,246,0.18)'} 0, transparent 44%)` }} />
         <header>
-          <h1 className={cn("font-black tracking-tighter", isLandscapeMobile ? "text-2xl" : "text-6xl")}>System Settings</h1>
-          <p className={cn("text-muted-foreground mt-2 font-medium", isLandscapeMobile ? "text-xs" : "text-2xl")}>Configure your VelocityOS experience</p>
+          <h1 className={cn("font-black tracking-tighter", isLandscapeMobile ? "text-2xl" : "text-6xl")}>Settings</h1>
+          <p className={cn("text-muted-foreground mt-2 font-medium", isLandscapeMobile ? "text-xs" : "text-2xl")}>Configure the Velocity app experience</p>
         </header>
         <section
           className={cn('relative overflow-hidden rounded-[2rem] border backdrop-blur-xl', heroCardClassName, isLandscapeMobile ? 'p-3' : 'p-6')}
@@ -660,7 +650,7 @@ export function SettingsPage() {
                       </div>
                     ) : availableVoices.length === 0 ? (
                       <div className={cn("rounded-md border border-white/10 bg-white/5 text-white/70", isLandscapeMobile ? "p-2 text-[10px]" : "p-3 text-xs")}>
-                        No named voice profiles were exposed by this device. VelocityOS will still use the system default voice output when available.
+                        No named voice profiles were exposed by this device. Velocity will still use the system default voice output when available.
                       </div>
                     ) : null}
                   </>
@@ -829,9 +819,9 @@ export function SettingsPage() {
           </div>
           <div id="settings-health" className={cn(isLandscapeMobile ? "space-y-3" : "space-y-8")}>
             <div className="space-y-1">
-              <div className={cn("font-black uppercase tracking-[0.22em] text-primary/75", isLandscapeMobile ? "text-[10px]" : "text-xs")}>System Health</div>
+              <div className={cn("font-black uppercase tracking-[0.22em] text-primary/75", isLandscapeMobile ? "text-[10px]" : "text-xs")}>App Status</div>
               <h2 className={cn("font-black tracking-tight", isLandscapeMobile ? "text-xl" : "text-3xl")}>Keep the car app operational</h2>
-              <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[11px]" : "text-sm")}>Native monitor readiness, hardware state, installation, and recovery actions.</p>
+              <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[11px]" : "text-sm")}>Background reminders, hardware state, installation, and recovery actions.</p>
             </div>
             <SystemStatusHub
               variant="hub"
@@ -847,41 +837,30 @@ export function SettingsPage() {
             <div className="flex items-center gap-4">
               <Gauge className={cn("text-primary", isLandscapeMobile ? "w-5 h-5" : "w-12 h-12")} />
               <div>
-                <h2 className={cn("font-bold", isLandscapeMobile ? "text-base" : "text-3xl")}>Speed Auto-Open Monitor</h2>
-                <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-xs" : "text-lg")}>Configure the native speed trigger used to reopen the dashboard while driving</p>
+                <h2 className={cn("font-bold", isLandscapeMobile ? "text-base" : "text-3xl")}>Background Speed Reminder</h2>
+                <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-xs" : "text-lg")}>Configure optional Android reminders when the device stays above your chosen speed threshold</p>
               </div>
             </div>
 
             {!isNativeMonitorAvailable && (
               <div className={cn("border border-amber-400/40 bg-amber-500/10 text-amber-200", isLandscapeMobile ? "rounded-xl p-2 text-[11px]" : "rounded-3xl p-5 text-sm")}>
-                Android native monitor controls are unavailable on this platform. Draft values are stored locally for preview.
+                Android background reminder controls are unavailable on this platform. Draft values are stored locally for preview.
               </div>
             )}
 
             {isMonitorLoading ? (
-              <div className={cn("bg-white/5 border border-white/10 text-muted-foreground", isLandscapeMobile ? "p-3 rounded-xl text-xs" : "p-6 rounded-[2rem]")}>Loading native monitor configuration...</div>
+              <div className={cn("bg-white/5 border border-white/10 text-muted-foreground", isLandscapeMobile ? "p-3 rounded-xl text-xs" : "p-6 rounded-[2rem]")}>Loading background reminder configuration...</div>
             ) : monitorConfig ? (
               <>
-                <div className={cn("grid grid-cols-1 md:grid-cols-2", isLandscapeMobile ? "gap-2" : "gap-4")}>
+                <div className={cn("grid grid-cols-1", isLandscapeMobile ? "gap-2" : "gap-4")}>
                   <div className={cn("flex items-center justify-between bg-white/5 border border-white/10", isLandscapeMobile ? "p-3 rounded-xl" : "p-6 rounded-[2rem]")}>
                     <div>
-                      <p className={cn("font-bold", isLandscapeMobile ? "text-sm" : "text-xl")}>Monitor Enabled</p>
-                      <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[11px]" : "text-sm")}>Run native speed checks in the background</p>
+                      <p className={cn("font-bold", isLandscapeMobile ? "text-sm" : "text-xl")}>Reminder Enabled</p>
+                      <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[11px]" : "text-sm")}>Run Android speed checks in the background and post a reminder notification</p>
                     </div>
                     <Switch
                       checked={monitorConfig.enabled}
                       onCheckedChange={(value) => void applyMonitorPatch({ enabled: value })}
-                      className={cn(isLandscapeMobile ? "scale-95" : "scale-125")}
-                    />
-                  </div>
-                  <div className={cn("flex items-center justify-between bg-white/5 border border-white/10", isLandscapeMobile ? "p-3 rounded-xl" : "p-6 rounded-[2rem]")}>
-                    <div>
-                      <p className={cn("font-bold", isLandscapeMobile ? "text-sm" : "text-xl")}>Strict Auto-Open</p>
-                      <p className={cn("text-muted-foreground", isLandscapeMobile ? "text-[11px]" : "text-sm")}>Requires default launcher or device-owner privileges</p>
-                    </div>
-                    <Switch
-                      checked={monitorConfig.strictAutoOpen}
-                      onCheckedChange={(value) => void applyMonitorPatch({ strictAutoOpen: value })}
                       className={cn(isLandscapeMobile ? "scale-95" : "scale-125")}
                     />
                   </div>
@@ -938,25 +917,18 @@ export function SettingsPage() {
                   </div>
                 </div>
 
-                <div className={cn("grid grid-cols-1 md:grid-cols-3", isLandscapeMobile ? "gap-2" : "gap-4")}>
-                  <div className={cn("flex items-center justify-between border", isLandscapeMobile ? "p-3 rounded-xl" : "p-5 rounded-[1.5rem]", strictPrivilegeReady ? "border-green-500/40 bg-green-500/10" : "border-amber-500/40 bg-amber-500/10")}>
-                    <div className="flex items-center gap-2">
-                      {strictPrivilegeReady ? <ShieldCheck className={cn(isLandscapeMobile ? "w-4 h-4" : "w-5 h-5")} /> : <ShieldAlert className={cn(isLandscapeMobile ? "w-4 h-4" : "w-5 h-5")} />}
-                      <span className={cn("font-bold uppercase tracking-wide", isLandscapeMobile ? "text-[10px]" : "text-xs")}>Strict Readiness</span>
-                    </div>
-                    <span className={cn("font-black uppercase", isLandscapeMobile ? "text-[10px]" : "text-xs")}>{strictPrivilegeReady ? 'Ready' : 'Missing Role'}</span>
+                <div className={cn("grid grid-cols-1 md:grid-cols-2", isLandscapeMobile ? "gap-2" : "gap-4")}>
+                  <div className={cn("flex items-center justify-between bg-white/5 border border-white/10", isLandscapeMobile ? "p-3 rounded-xl" : "p-5 rounded-[1.5rem]")}>
+                    <span className={cn("font-bold uppercase tracking-wide", isLandscapeMobile ? "text-[10px]" : "text-xs")}>Trigger Mode</span>
+                    <span className={cn("font-black", isLandscapeMobile ? "text-[10px]" : "text-xs")}>Notification</span>
                   </div>
                   <div className={cn("flex items-center justify-between bg-white/5 border border-white/10", isLandscapeMobile ? "p-3 rounded-xl" : "p-5 rounded-[1.5rem]")}>
-                    <span className={cn("font-bold uppercase tracking-wide", isLandscapeMobile ? "text-[10px]" : "text-xs")}>Device Owner</span>
-                    <span className={cn("font-black", isLandscapeMobile ? "text-[10px]" : "text-xs")}>{monitorConfig.isDeviceOwner ? 'Yes' : 'No'}</span>
-                  </div>
-                  <div className={cn("flex items-center justify-between bg-white/5 border border-white/10", isLandscapeMobile ? "p-3 rounded-xl" : "p-5 rounded-[1.5rem]")}>
-                    <span className={cn("font-bold uppercase tracking-wide", isLandscapeMobile ? "text-[10px]" : "text-xs")}>Default Launcher</span>
-                    <span className={cn("font-black", isLandscapeMobile ? "text-[10px]" : "text-xs")}>{monitorConfig.isDefaultLauncher ? 'Yes' : 'No'}</span>
+                    <span className={cn("font-bold uppercase tracking-wide", isLandscapeMobile ? "text-[10px]" : "text-xs")}>Platform</span>
+                    <span className={cn("font-black", isLandscapeMobile ? "text-[10px]" : "text-xs")}>{isNativeMonitorAvailable ? 'Android Native' : 'Web Preview'}</span>
                   </div>
                 </div>
 
-                <div className={cn("grid grid-cols-1 md:grid-cols-3", isLandscapeMobile ? "gap-2" : "gap-4")}>
+                <div className={cn("grid grid-cols-1 md:grid-cols-2", isLandscapeMobile ? "gap-2" : "gap-4")}>
                   <Button
                     variant="outline"
                     onClick={handleRequestMonitorPermissions}
@@ -964,14 +936,6 @@ export function SettingsPage() {
                     className={cn("font-black border-white/20 bg-white/5", isLandscapeMobile ? "h-10 rounded-lg text-xs" : "h-14 rounded-2xl text-base")}
                   >
                     Request Permissions
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleOpenHomeSettings}
-                    disabled={!isNativeMonitorAvailable || isMonitorSaving}
-                    className={cn("font-black border-white/20 bg-white/5", isLandscapeMobile ? "h-10 rounded-lg text-xs" : "h-14 rounded-2xl text-base")}
-                  >
-                    Open Home App Settings
                   </Button>
                   <Button
                     variant="outline"
@@ -1088,7 +1052,7 @@ export function SettingsPage() {
             {isInstallable && (
               <Button onClick={install} className={cn("w-full font-black bg-primary shadow-glow-lg", isLandscapeMobile ? "h-10 rounded-lg text-xs gap-1.5" : "h-24 rounded-[2rem] text-3xl gap-4")}>
                 <Download className={cn(isLandscapeMobile ? "w-4 h-4" : "w-8 h-8")} />
-                Install VelocityOS Native
+                Install Velocity App
               </Button>
             )}
           </section>
@@ -1098,21 +1062,21 @@ export function SettingsPage() {
                 <LogOut className={cn("text-destructive", isLandscapeMobile ? "w-5 h-5" : "w-12 h-12")} />
               </div>
               <div>
-                <h2 className={cn("font-bold text-destructive", isLandscapeMobile ? "text-sm" : "text-3xl")}>Factory Reset</h2>
-                <p className={cn("text-muted-foreground font-medium", isLandscapeMobile ? "text-xs" : "text-xl")}>Clear all saved locations, history, and system settings</p>
+                <h2 className={cn("font-bold text-destructive", isLandscapeMobile ? "text-sm" : "text-3xl")}>Reset App Data</h2>
+                <p className={cn("text-muted-foreground font-medium", isLandscapeMobile ? "text-xs" : "text-xl")}>Clear saved locations, history, and app settings</p>
               </div>
             </div>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="lg" className={cn("font-black", isLandscapeMobile ? "rounded-lg h-10 px-3 text-xs" : "rounded-3xl h-20 px-12 text-2xl")} disabled={isLoading}>
-                  {isLoading ? "Purging..." : "Reset System"}
+                  {isLoading ? "Purging..." : "Reset App"}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent className="bg-zinc-950 border-white/20 text-white rounded-[3rem] p-12 max-w-2xl">
                 <AlertDialogHeader>
-                  <AlertDialogTitle className="text-4xl font-black mb-4">Confirm System Reset?</AlertDialogTitle>
+                  <AlertDialogTitle className="text-4xl font-black mb-4">Confirm App Reset?</AlertDialogTitle>
                   <AlertDialogDescription className="text-xl text-muted-foreground leading-relaxed">
-                    This will permanently erase your preferences, saved destinations, and navigation history. This operation is irreversible.
+                    This will permanently erase your app preferences, saved destinations, and navigation history. This operation is irreversible.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter className="mt-8 gap-4">
@@ -1129,7 +1093,7 @@ export function SettingsPage() {
         <footer className={cn("text-center text-muted-foreground flex flex-col items-center justify-center opacity-40", isLandscapeMobile ? "gap-2 pb-2" : "gap-4 pb-12")}>
           <div className="flex items-center gap-3">
              <Info className={cn(isLandscapeMobile ? "w-4 h-4" : "w-6 h-6")} />
-             <span className={cn("uppercase font-black tracking-[0.4em]", isLandscapeMobile ? "text-[10px]" : "text-lg")}>VelocityOS Engine v1.2.0 Production</span>
+             <span className={cn("uppercase font-black tracking-[0.4em]", isLandscapeMobile ? "text-[10px]" : "text-lg")}>Velocity App v1.2.0 Production</span>
           </div>
           <p className={cn("font-medium", isLandscapeMobile ? "text-[10px]" : "text-sm")}>© 2025 Booster Systems Inc. | Safety First Protocol Active</p>
         </footer>

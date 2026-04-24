@@ -129,6 +129,7 @@ export const MapView = React.memo(function MapView() {
   const [googleMapCenter, setGoogleMapCenter] = useState<[number, number] | null>(currentPos);
   const [isLiveDrivePanelHidden, setIsLiveDrivePanelHidden] = useState(false);
   const [isTripHistoryHidden, setIsTripHistoryHidden] = useState(false);
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
   const navigationAlert = useMemo(() => getNavigationAlert({
     gpsStatus,
     routeState,
@@ -140,22 +141,28 @@ export const MapView = React.memo(function MapView() {
   }), [gpsStatus, routeState, routeFailureKind, routeFailureMessage, lastGpsFixAt, activeDestination, activeRoute]);
   const liveDriveTrip = useMemo(() => getLiveDriveTrip(trips), [trips]);
   const liveDriveHistory = useMemo(() => getLiveDriveTripHistory(trips), [trips]);
-  const shouldShowLiveDrive = Boolean(!activeDestination && !discoveredPlace && liveDriveTrip);
+  const hasPinnedDestination = Boolean(activeDestination || discoveredPlace);
+  const hasLiveDrivePanelData = Boolean(liveDriveTrip);
+  const shouldShowLiveDriveTrace = Boolean(!hasPinnedDestination && liveDriveTrip);
+  const shouldShowLiveDrivePanel = hasLiveDrivePanelData && !hasPinnedDestination;
   const shouldShowTripHistory = liveDriveHistory.length > 0;
-  const showLiveDrivePanel = shouldShowLiveDrive && !isLiveDrivePanelHidden;
+  const showLiveDrivePanel = shouldShowLiveDrivePanel && !isLiveDrivePanelHidden;
   const showTripHistoryPanel = shouldShowTripHistory && !isTripHistoryHidden;
   const liveDriveDurationMs = liveDriveTrip ? getTripDurationMs(liveDriveTrip) : 0;
   const mapSpeed = useMemo(() => formatSpeed(currentSpeed ?? 0, units), [currentSpeed, units]);
-  const useGooglePreview = mapProvider === 'google' && !shouldShowLiveDrive;
+  const useGooglePreview = mapProvider === 'google' && !shouldShowLiveDriveTrace;
   const canOpenNativeGoogleFullscreen = useGooglePreview && isEmbeddedWebViewAvailable();
   const liveDrivePanelSessionKey = liveDriveTrip ? `${liveDriveTrip.startTime}:${liveDriveTrip.endTime ?? 'active'}` : 'none';
   const liveDriveGeoJSON = useMemo((): GeoJSON.Feature<GeoJSON.LineString> | null => {
-    if (!shouldShowLiveDrive) return null;
+    if (!shouldShowLiveDriveTrace) return null;
     return getPathGeoJson(liveDriveTrip);
-  }, [liveDriveTrip, shouldShowLiveDrive]);
+  }, [liveDriveTrip, shouldShowLiveDriveTrace]);
   const mapCarFallbackClassName = isLandscapeMobile ? 'h-[66px] w-[66px]' : 'h-[88px] w-[88px]';
   const mapStyle = useMemo(() => getMapStyle(mapTheme), [mapTheme]);
   const mapFilter = useMemo(() => getMapFilter(mapTheme), [mapTheme]);
+  const topInfoPanelStyle = useMemo(() => ({
+    width: isLandscapeMobile ? 'min(calc(100vw - 5.5rem), 18rem)' : 'min(calc(100vw - 7rem), 24rem)',
+  }), [isLandscapeMobile]);
 
   useEffect(() => {
     setIsLiveDrivePanelHidden(false);
@@ -253,6 +260,7 @@ export const MapView = React.memo(function MapView() {
   useEffect(() => {
     if (!isMapOpen) {
       setIsFullscreen(false);
+      setIsMapLoaded(false);
     }
   }, [isMapOpen]);
 
@@ -347,7 +355,7 @@ export const MapView = React.memo(function MapView() {
   const locationMarkers = useMemo(() => locations.map((loc) => (
     <Marker key={loc.id} longitude={loc.lon} latitude={loc.lat}>
       <div
-        className="custom-pin-icon w-8 h-8 rounded-full border-4 border-white shadow-glow transition-all"
+        className="custom-pin-icon w-8 h-8 rounded-full border-4 border-white shadow-lg transition-all"
         style={{
           backgroundColor: getCategoryColor(loc.category),
           transform: activeDestination?.id === loc.id ? 'scale(1.5) translateY(-10px)' : 'scale(1)'
@@ -403,12 +411,13 @@ export const MapView = React.memo(function MapView() {
           mapStyle={mapStyle}
           onDrag={handleMapInteraction}
           onWheel={handleMapInteraction}
+          onLoad={() => setIsMapLoaded(true)}
           style={{ width: '100%', height: '100%' }}
         >
           {currentPos && (
             <Marker longitude={currentPos[1]} latitude={currentPos[0]}>
               <Suspense
-                fallback={<div className={cn('rounded-full border-4 border-white/70 bg-primary/80 shadow-glow', mapCarFallbackClassName)} />}
+                fallback={<div className={cn('rounded-full border-4 border-white/70 bg-primary/80 shadow-lg', mapCarFallbackClassName)} />}
               >
                 <MapCarIcon
                   iconId={activeMapIconId}
@@ -423,22 +432,23 @@ export const MapView = React.memo(function MapView() {
           {discoveredPlace && (
             <Marker longitude={discoveredPlace.lon} latitude={discoveredPlace.lat}>
               <motion.div 
-                initial={{ scale: 0, y: -20 }}
-                animate={{ scale: 1, y: 0 }}
-                className="w-14 h-14 bg-primary border-4 border-white rounded-full shadow-glow-lg flex items-center justify-center"
+                initial={{ scale: 1, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.12 }}
+                className="w-14 h-14 bg-primary border-4 border-white rounded-full shadow-lg flex items-center justify-center"
               >
                 <Globe className="w-7 h-7 text-white" />
               </motion.div>
             </Marker>
           )}
-          {locationMarkers}
-          {liveDriveGeoJSON && !activeRoute && (
+          {currentPos && isMapLoaded && locationMarkers}
+          {isMapLoaded && liveDriveGeoJSON && !activeRoute && (
             <Source id="live-drive-source" type="geojson" data={liveDriveGeoJSON}>
               <Layer id="live-drive-layer-glow" type="line" paint={{ 'line-color': '#22c55e', 'line-width': 18, 'line-opacity': 0.24, 'line-blur': 12 }} />
               <Layer id="live-drive-layer" type="line" layout={{ 'line-join': 'round', 'line-cap': 'round' }} paint={{ 'line-color': '#34d399', 'line-width': 7, 'line-opacity': 0.95 }} />
             </Source>
           )}
-          {routeGeoJSON && (
+          {isMapLoaded && routeGeoJSON && (
             <Source id="route-source" type="geojson" data={routeGeoJSON}>
               <Layer id="route-layer-glow" type="line" paint={{ 'line-color': '#3b82f6', 'line-width': 24, 'line-opacity': 0.3, 'line-blur': 15 }} />
               <Layer id="route-layer" type="line" layout={{ 'line-join': 'round', 'line-cap': 'round' }} paint={{ 'line-color': '#3b82f6', 'line-width': 12, 'line-opacity': 1 }} />
@@ -450,56 +460,63 @@ export const MapView = React.memo(function MapView() {
         "absolute z-[110] flex justify-between items-start",
         isLandscapeMobile ? "top-2 left-2 right-2" : "top-6 left-6 right-6"
       )}>
-        <div className="flex gap-4">
-          <Button variant="secondary" size="lg" onClick={closeMap} className={cn(topActionButtonClass, "bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-90 transition-transform")}>
-            <X className={actionIconClass} />
-          </Button>
-          {useGooglePreview && (
+        <div className={cn('flex flex-col items-start', isLandscapeMobile ? 'gap-2' : 'gap-4')}>
+          <div className={cn('flex items-start', isLandscapeMobile ? 'gap-2' : 'gap-4')}>
+            <Button variant="secondary" size="lg" onClick={closeMap} className={cn(topActionButtonClass, "bg-zinc-950/90 backdrop-blur-sm border border-white/10 shadow-lg active:scale-95 transition-transform")}>
+              <X className={actionIconClass} />
+            </Button>
+            {useGooglePreview && (
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => window.open(googleDirectionsUrl, '_blank', 'noopener,noreferrer')}
+                className={cn(topActionButtonClass, "bg-zinc-950/90 backdrop-blur-sm border border-white/10 shadow-lg active:scale-95 transition-transform")}
+              >
+                <ExternalLink className={actionIconClass} />
+              </Button>
+            )}
             <Button
               variant="secondary"
               size="lg"
-              onClick={() => window.open(googleDirectionsUrl, '_blank', 'noopener,noreferrer')}
-              className={cn(topActionButtonClass, "bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-90 transition-transform")}
+              onClick={() => void handleFullscreenToggle()}
+              className={cn(topActionButtonClass, "bg-zinc-950/90 backdrop-blur-sm border border-white/10 shadow-lg active:scale-95 transition-transform")}
             >
-              <ExternalLink className={actionIconClass} />
+              <span className={cn('font-black uppercase tracking-[0.18em]', isLandscapeMobile ? 'text-[8px]' : 'text-[9px] md:text-[11px]')}>
+                {isFullscreen ? 'Exit' : 'Full'}
+              </span>
             </Button>
-          )}
-          <Button
-            variant="secondary"
-            size="lg"
-            onClick={() => void handleFullscreenToggle()}
-            className={cn(topActionButtonClass, "bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-90 transition-transform")}
-          >
-            <span className={cn('font-black uppercase tracking-[0.18em]', isLandscapeMobile ? 'text-[8px]' : 'text-[9px] md:text-[11px]')}>
-              {isFullscreen ? 'Exit' : 'Full'}
-            </span>
-          </Button>
-          {shouldShowLiveDrive && isLiveDrivePanelHidden && !(activeDestination || discoveredPlace) && (
+          </div>
+          {shouldShowLiveDrivePanel && isLiveDrivePanelHidden && (
             <Button
               variant="secondary"
               size="lg"
               onClick={() => setIsLiveDrivePanelHidden(false)}
               className={cn(
-                "bg-zinc-950/90 backdrop-blur-3xl border border-emerald-400/25 text-emerald-100 shadow-glow active:scale-95 transition-transform font-black uppercase tracking-[0.18em]",
+                "bg-zinc-950/90 backdrop-blur-sm border border-emerald-400/25 text-emerald-100 shadow-lg active:scale-95 transition-transform font-black uppercase tracking-[0.18em]",
                 isLandscapeMobile ? 'h-10 rounded-xl px-3 text-[10px]' : 'h-12 rounded-2xl px-4 text-[11px] md:h-16 md:rounded-[1.5rem] md:px-5'
               )}
             >
-              Open Drive Panel
+              Reopen Untethered Trip
             </Button>
           )}
           <AnimatePresence mode="wait">
-            {(activeDestination || discoveredPlace) ? (
-              <motion.div 
+            {hasPinnedDestination ? (
+              <motion.div
                 key="destination-panel"
-                initial={{ opacity: 0, x: -20 }} 
-                animate={{ opacity: 1, x: 0 }} 
-                exit={{ opacity: 0, x: -20 }} 
-                className="bg-primary/95 backdrop-blur-3xl p-3 sm:p-4 md:p-6 rounded-2xl md:rounded-[2.5rem] flex flex-col justify-center min-w-[170px] sm:min-w-[230px] md:min-w-[350px] border border-white/20 shadow-glow-lg"
+                initial="hidden"
+                animate="visible"
+                exit="hidden"
+                variants={{
+                  hidden: { opacity: 0, x: -12 },
+                  visible: { opacity: 1, x: 0, transition: { duration: 0.15 } }
+                }}
+                style={topInfoPanelStyle}
+                className="bg-primary/95 backdrop-blur-sm p-3 sm:p-4 md:p-6 rounded-2xl md:rounded-[2.5rem] flex flex-col justify-center border border-white/20 shadow-lg"
               >
                 <span className="text-[10px] md:text-xs uppercase font-black text-white/70 tracking-widest flex items-center gap-1.5 md:gap-2">
                   <Navigation className="w-3.5 h-3.5 md:w-4 md:h-4 fill-current" /> Navigating To
                 </span>
-                <span className="text-xl sm:text-2xl md:text-4xl font-black text-white truncate max-w-[180px] sm:max-w-[250px] md:max-w-[400px] text-neon">
+                <span className="text-xl sm:text-2xl md:text-4xl font-black text-white truncate text-neon">
                   {(activeDestination || discoveredPlace)?.label}
                 </span>
                 <span className="mt-2 text-[10px] md:text-xs font-bold uppercase tracking-[0.18em] text-white/70">
@@ -512,15 +529,23 @@ export const MapView = React.memo(function MapView() {
                   </span>
                 )}
               </motion.div>
-            ) : showLiveDrivePanel ? (
+            ) : null}
+          </AnimatePresence>
+          <AnimatePresence mode="wait">
+            {showLiveDrivePanel ? (
               <motion.div
                 key="live-drive-panel"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="bg-zinc-950/88 backdrop-blur-3xl p-3 sm:p-4 md:p-6 rounded-2xl md:rounded-[2.5rem] flex flex-col justify-center min-w-[190px] sm:min-w-[250px] md:min-w-[390px] border border-emerald-400/25 shadow-glow-lg"
+                initial="hidden"
+                animate="visible"
+                exit="hidden"
+                variants={{
+                  hidden: { opacity: 0, x: -12 },
+                  visible: { opacity: 1, x: 0, transition: { duration: 0.15 } }
+                }}
+                style={topInfoPanelStyle}
+                className="bg-zinc-950/88 backdrop-blur-sm p-3 sm:p-4 md:p-6 rounded-2xl md:rounded-[2.5rem] flex flex-col justify-center border border-emerald-400/25 shadow-lg"
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <span className="text-[10px] md:text-xs uppercase font-black text-emerald-200/75 tracking-widest flex items-center gap-1.5 md:gap-2">
                       <Route className="w-3.5 h-3.5 md:w-4 md:h-4" /> Live Drive
@@ -532,13 +557,13 @@ export const MapView = React.memo(function MapView() {
                   <button
                     type="button"
                     onClick={() => setIsLiveDrivePanelHidden(true)}
-                    className="inline-flex h-8 items-center rounded-full border border-white/15 bg-white/5 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+                    className="inline-flex h-8 items-center self-start rounded-full border border-white/15 bg-white/5 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-white/75 transition-colors hover:bg-white/10 hover:text-white"
                   >
                     <X className="mr-1 h-3.5 w-3.5" />
-                    Close Panel
+                    Close Trip Popup
                   </button>
                 </div>
-                <span className="mt-2 text-[11px] md:text-sm text-white/72 max-w-[340px]">
+                <span className="mt-2 text-[11px] md:text-sm text-white/72">
                   {liveDriveTrip?.endTime
                     ? 'No destination was pinned, so VelocityOS kept the breadcrumb trail of the path you actually drove.'
                     : 'No point of interest is armed, so VelocityOS is tracing your exact path in real time.'}
@@ -581,7 +606,7 @@ export const MapView = React.memo(function MapView() {
             variant="secondary"
             size="lg"
             onClick={() => setSearchOverlay(true)}
-            className={cn(topActionButtonClass, "bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-95 transition-transform")}
+            className={cn(topActionButtonClass, "bg-zinc-950/90 backdrop-blur-sm border border-white/10 shadow-lg active:scale-95 transition-transform")}
           >
             <Search className={actionIconClass} />
           </Button>
@@ -591,7 +616,7 @@ export const MapView = React.memo(function MapView() {
             onClick={() => setShowShare(true)}
             className={cn(
               topActionButtonClass,
-              "bg-zinc-950/90 backdrop-blur-3xl border border-white/10 shadow-glow active:scale-95 transition-transform", 
+              "bg-zinc-950/90 backdrop-blur-sm border border-white/10 shadow-lg active:scale-95 transition-transform", 
               isSharingLive && "text-primary border-primary/50"
             )}
           >
@@ -604,15 +629,15 @@ export const MapView = React.memo(function MapView() {
         isLandscapeMobile ? 'bottom-2 left-2 max-w-[76vw] gap-2' : 'bottom-6 left-6 max-w-[28rem] gap-4'
       )}>
         <div className={cn(
-          "pointer-events-none rounded-2xl border border-white/10 bg-zinc-950/45 text-white shadow-[0_18px_50px_-28px_rgba(0,0,0,0.9)] backdrop-blur-xl",
+          "pointer-events-none rounded-2xl border border-white/8 bg-zinc-950/24 text-white shadow-[0_18px_50px_-28px_rgba(0,0,0,0.72)] backdrop-blur-md",
           isLandscapeMobile ? 'px-3 py-2' : 'px-4 py-3'
         )}>
-          <div className="text-[9px] font-black uppercase tracking-[0.22em] text-white/55">Map Speed</div>
+          <div className="text-[9px] font-black uppercase tracking-[0.22em] text-white/45">Map Speed</div>
           <div className="mt-1 flex items-end gap-2">
-            <span className={cn('font-black tabular-nums leading-none text-white/88', isLandscapeMobile ? 'text-3xl' : 'text-5xl')}>
+            <span className={cn('font-black tabular-nums leading-none text-white/78', isLandscapeMobile ? 'text-3xl' : 'text-5xl')}>
               {mapSpeed}
             </span>
-            <span className={cn('pb-1 font-black uppercase tracking-[0.22em] text-white/55', isLandscapeMobile ? 'text-[10px]' : 'text-xs')}>
+            <span className={cn('pb-1 font-black uppercase tracking-[0.22em] text-white/42', isLandscapeMobile ? 'text-[10px]' : 'text-xs')}>
               {units}
             </span>
           </div>
@@ -623,25 +648,29 @@ export const MapView = React.memo(function MapView() {
             size="lg"
             onClick={() => setIsTripHistoryHidden(false)}
             className={cn(
-              "bg-zinc-950/88 backdrop-blur-3xl border border-cyan-300/20 text-cyan-50 shadow-glow active:scale-95 transition-transform font-black uppercase tracking-[0.18em]",
+              "bg-zinc-950/88 backdrop-blur-sm border border-cyan-300/20 text-cyan-50 shadow-lg active:scale-95 transition-transform font-black uppercase tracking-[0.18em]",
               isLandscapeMobile ? 'h-10 rounded-xl px-3 text-[10px]' : 'h-12 rounded-2xl px-4 text-[11px]'
             )}
           >
             Open Trip History
           </Button>
         )}
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {showTripHistoryPanel && (
             <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 18 }}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              variants={{
+                hidden: { opacity: 0, y: 12 },
+                visible: { opacity: 1, y: 0, transition: { duration: 0.15 } }
+              }}
               className={cn(
-                "w-full rounded-[1.6rem] border border-cyan-300/16 bg-zinc-950/82 p-3 text-white shadow-[0_30px_80px_-42px_rgba(0,0,0,0.95)] backdrop-blur-3xl",
+                "w-full rounded-[1.6rem] border border-cyan-300/16 bg-zinc-950/82 p-3 text-white shadow-lg backdrop-blur-sm",
                 isLandscapeMobile ? 'max-w-[76vw]' : 'max-w-[28rem] p-4'
               )}
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-100/70">
                     <History className="h-3.5 w-3.5" /> Untethered Trips
@@ -651,7 +680,7 @@ export const MapView = React.memo(function MapView() {
                 <button
                   type="button"
                   onClick={() => setIsTripHistoryHidden(true)}
-                  className="inline-flex h-8 items-center rounded-full border border-white/15 bg-white/5 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+                  className="inline-flex h-8 items-center self-start rounded-full border border-white/15 bg-white/5 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-white/75 transition-colors hover:bg-white/10 hover:text-white"
                 >
                   <X className="mr-1 h-3.5 w-3.5" />
                   Close History
@@ -727,9 +756,9 @@ export const MapView = React.memo(function MapView() {
           size="lg" 
           className={cn(
             perspectiveButtonClass,
-            "backdrop-blur-3xl border border-white/10 shadow-glow-lg transition-all", 
+            "backdrop-blur-sm border border-white/10 shadow-lg transition-all", 
             mapPerspective === 'top-down'
-              ? cn("bg-primary text-white", isLandscapeMobile ? "scale-100" : "scale-110")
+              ? "bg-primary text-white"
               : "bg-zinc-950/90 text-muted-foreground"
           )} 
           onClick={() => setMapPerspective('top-down')}
@@ -741,9 +770,9 @@ export const MapView = React.memo(function MapView() {
           size="lg" 
           className={cn(
             perspectiveButtonClass,
-            "backdrop-blur-3xl border border-white/10 shadow-glow-lg transition-all", 
+            "backdrop-blur-sm border border-white/10 shadow-lg transition-all", 
             mapPerspective === 'driving'
-              ? cn("bg-primary text-white", isLandscapeMobile ? "scale-100" : "scale-110")
+              ? "bg-primary text-white"
               : "bg-zinc-950/90 text-muted-foreground"
           )} 
           onClick={() => setMapPerspective('driving')}
@@ -755,7 +784,7 @@ export const MapView = React.memo(function MapView() {
           size="lg" 
           className={cn(
             perspectiveButtonClass,
-            "backdrop-blur-3xl border border-white/10 shadow-glow-lg transition-all", 
+            "backdrop-blur-sm border border-white/10 shadow-lg transition-all", 
             isFollowing ? "bg-primary" : "bg-zinc-950/90"
           )} 
           onClick={() => {

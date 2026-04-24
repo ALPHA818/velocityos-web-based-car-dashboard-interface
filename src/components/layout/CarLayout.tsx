@@ -56,6 +56,7 @@ const NavButton = ({ icon: Icon, isActive, onClick, badge, label, mobileSidebar 
 const loadMapView = () => import('@/components/drive/MapView').then((module) => ({ default: module.MapView }));
 const loadLibraryMediaPlayer = () => import('@/components/layout/LibraryMediaPlayer').then((module) => ({ default: module.LibraryMediaPlayer }));
 
+const LazyMapView = lazy(loadMapView);
 const LazyLibraryMediaPlayer = lazy(loadLibraryMediaPlayer);
 
 const GEOLOCATION_UPDATE_INTERVAL_MS = 600;
@@ -773,6 +774,13 @@ export function CarLayout({ children }: { children: React.ReactNode }) {
           parked={!isMapOpen && isParked}
           showIdleLabel={!isMapOpen}
         />
+        {isMapOpen && (
+          <div className="absolute inset-0 z-40">
+            <Suspense fallback={null}>
+              <LazyMapView />
+            </Suspense>
+          </div>
+        )}
         <NavigationBanner
           isMapOpen={isMapOpen}
           isLandscapeMobile={isLandscapeMobile}

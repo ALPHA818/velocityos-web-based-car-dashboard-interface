@@ -8,6 +8,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.Window;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -20,6 +23,8 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
 	private static final int SPEED_MONITOR_PERMISSION_REQUEST_CODE = 4103;
 	private static volatile boolean appVisible = false;
+	private boolean startupPermissionRequestInFlight = false;
+	private boolean startupPermissionsRequestedOnce = false;
 
 	public static boolean isAppVisible() {
 		return appVisible;
@@ -78,40 +83,52 @@ public class MainActivity extends BridgeActivity {
 	public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
 		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 		if (requestCode == SPEED_MONITOR_PERMISSION_REQUEST_CODE) {
-			ensureRuntimePermissions();
+			startupPermissionRequestInFlight = false;
 			ensureSpeedMonitorRunning();
 		}
 	}
 
 	private void ensureRuntimePermissions() {
+		if (startupPermissionRequestInFlight || startupPermissionsRequestedOnce) {
+			return;
+		}
+
+		String[] missingPermissions = getMissingStartupPermissions();
+		if (missingPermissions.length == 0) {
+			return;
+		}
+
+		startupPermissionRequestInFlight = true;
+		startupPermissionsRequestedOnce = true;
+		ActivityCompat.requestPermissions(
+				this,
+				missingPermissions,
+				SPEED_MONITOR_PERMISSION_REQUEST_CODE
+		);
+	}
+
+	private String[] getMissingStartupPermissions() {
+		List<String> missingPermissions = new ArrayList<>();
+
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
 				&& ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-			ActivityCompat.requestPermissions(
-					this,
-					new String[]{Manifest.permission.POST_NOTIFICATIONS},
-					SPEED_MONITOR_PERMISSION_REQUEST_CODE
-			);
-			return;
+			missingPermissions.add(Manifest.permission.POST_NOTIFICATIONS);
 		}
 
-		if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
-				&& ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-			ActivityCompat.requestPermissions(
-					this,
-					new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
-					SPEED_MONITOR_PERMISSION_REQUEST_CODE
-			);
-			return;
+		if (!hasLocationPermission()) {
+			missingPermissions.add(Manifest.permission.ACCESS_FINE_LOCATION);
 		}
 
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
-				&& ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-			ActivityCompat.requestPermissions(
-					this,
-					new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION},
-					SPEED_MONITOR_PERMISSION_REQUEST_CODE
-			);
-		}
+		return missingPermissions.toArray(new String[0]);
+	}
+
+	private boolean hasPendingStartupPermissions() {
+		return getMissingStartupPermissions().length > 0;
+	}
+
+	private boolean hasLocationPermission() {
+		return ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+				|| ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
 	}
 
 	private void applyImmersiveMode() {
@@ -137,6 +154,11 @@ public class MainActivity extends BridgeActivity {
 		Intent serviceIntent = new Intent(this, SpeedMonitorService.class);
 		if (!MonitorPreferences.isEnabled(this)) {
 			stopService(serviceIntent);
+			SpeedMonitorService.dismissAlertNotification(this);
+			return;
+		}
+
+		if (startupPermissionRequestInFlight || hasPendingStartupPermissions() || !hasLocationPermission()) {
 			return;
 		}
 

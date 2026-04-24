@@ -1,5 +1,6 @@
 package com.velocityos.dashboard;
 
+import android.Manifest;
 import android.app.admin.DevicePolicyManager;
 import android.content.Context;
 import android.content.Intent;
@@ -8,6 +9,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 
 import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
 
 public final class MonitorPreferences {
     private static final String PREFS_NAME = "velocityos_native_monitor";
@@ -16,10 +18,11 @@ public final class MonitorPreferences {
     private static final String KEY_THRESHOLD_KPH = "threshold_kph";
     private static final String KEY_COOLDOWN_SECONDS = "cooldown_seconds";
     private static final String KEY_STRICT_AUTO_OPEN = "strict_auto_open";
+    private static final String KEY_APP_MODE_MIGRATED = "app_mode_migrated";
 
     private static final float DEFAULT_THRESHOLD_KPH = 40f;
     private static final int DEFAULT_COOLDOWN_SECONDS = 15;
-    private static final boolean DEFAULT_ENABLED = true;
+    private static final boolean DEFAULT_ENABLED = false;
     private static final boolean DEFAULT_STRICT_AUTO_OPEN = false;
 
     private static final float MIN_THRESHOLD_KPH = 10f;
@@ -33,6 +36,14 @@ public final class MonitorPreferences {
     @NonNull
     public static Config getConfig(@NonNull Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+
+        if (!prefs.getBoolean(KEY_APP_MODE_MIGRATED, false)) {
+            prefs.edit()
+                    .putBoolean(KEY_ENABLED, DEFAULT_ENABLED)
+                    .putBoolean(KEY_STRICT_AUTO_OPEN, DEFAULT_STRICT_AUTO_OPEN)
+                    .putBoolean(KEY_APP_MODE_MIGRATED, true)
+                    .apply();
+        }
 
         boolean enabled = prefs.getBoolean(KEY_ENABLED, DEFAULT_ENABLED);
         float thresholdKph = clampThreshold(prefs.getFloat(KEY_THRESHOLD_KPH, DEFAULT_THRESHOLD_KPH));
@@ -54,6 +65,11 @@ public final class MonitorPreferences {
 
     public static boolean isEnabled(@NonNull Context context) {
         return getConfig(context).enabled;
+    }
+
+    public static boolean hasLocationPermission(@NonNull Context context) {
+        return ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
     public static float clampThreshold(float value) {

@@ -230,7 +230,7 @@ function YouTubeMusicPanel() {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-rose-400/30 bg-rose-500/10 p-3 text-sm text-rose-100">
-        YouTube Music integration is available below. Connect to use app deep-link or open a preview window that can switch to full screen inside VelocityOS.
+        YouTube Music integration is available below. Connect to use app deep-link or open a preview window that can switch to full screen inside Velocity.
       </div>
       <button
         onClick={() => window.location.assign('https://music.youtube.com/')}
@@ -310,7 +310,7 @@ function IntegrationDock({
             onChange={(event) => onPatch({ embedInPanel: event.target.checked })}
             className="accent-cyan-400"
           />
-          Show preview tools in VelocityOS
+          Show preview tools in Velocity
         </label>
       )}
 
@@ -359,7 +359,7 @@ function IntegrationDock({
             Preview Window
           </div>
           <div className="text-xs text-cyan-100/90">
-            Services like Spotify and YouTube Music often block iframe playback. VelocityOS keeps them usable with a native preview window instead, and you can expand it to full screen from the toolbar whenever you want.
+            Services like Spotify and YouTube Music often block iframe playback. Velocity keeps them usable with a native preview window instead, and you can expand it to full screen from the toolbar whenever you want.
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -661,7 +661,7 @@ function AssistantPanel() {
       <div className="max-h-56 overflow-y-auto space-y-2 rounded-lg border border-white/10 bg-black/20 p-3">
         {messages.length === 0 ? (
           <div className="text-sm text-muted-foreground">
-            Ask anything. History is stored locally on this device, and if Ollama is unreachable VelocityOS falls back to built-in offline guidance. Say "{aiName}" then a command to navigate by voice.
+            Ask anything. History is stored locally on this device, and if Ollama is unreachable Velocity falls back to built-in offline guidance. Say "{aiName}" then a command to navigate by voice.
           </div>
         ) : (
           messages.map((message) => (
@@ -889,9 +889,9 @@ export function AppsPage() {
         <header className={cn(isLandscapeMobile ? 'mb-3' : 'mb-6')}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className={cn('font-black tracking-tighter', isLandscapeMobile ? 'text-3xl' : 'text-6xl')}>App Launcher</h1>
+              <h1 className={cn('font-black tracking-tighter', isLandscapeMobile ? 'text-3xl' : 'text-6xl')}>Apps</h1>
               <p className={cn('text-muted-foreground mt-2 font-medium', isLandscapeMobile ? 'text-sm' : 'text-2xl')}>
-                Open built-in apps instantly and integrate phone, chat, and music services
+                Open built-in app views and connect phone, chat, and music services
               </p>
               <div className={cn('mt-1 text-cyan-200/80 font-bold', isLandscapeMobile ? 'text-[11px]' : 'text-sm')}>
                 Connected integrations: {connectedCount}/{INTEGRATED_APP_IDS.length}
