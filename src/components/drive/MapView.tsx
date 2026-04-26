@@ -174,6 +174,24 @@ export const MapView = React.memo(function MapView() {
     }
   }, [liveDriveHistory.length, liveDriveHistory[0]?.startTime]);
 
+  // Handle perspective changes even when not following
+  useEffect(() => {
+    if (useGooglePreview || !isMapOpen || !mapRef.current) {
+      return;
+    }
+
+    const isDriving = mapPerspective === 'driving';
+    
+    // Apply perspective change (pitch, bearing, zoom) regardless of following status
+    mapRef.current.easeTo({
+      pitch: isDriving ? 65 : 0,
+      bearing: isDriving ? (typeof currentHeading === 'number' && !Number.isNaN(currentHeading) ? currentHeading : 0) : 0,
+      zoom: isDriving ? 17.8 : 15.2,
+      duration: 500,
+      essential: true,
+    });
+  }, [mapPerspective, isMapOpen, useGooglePreview, currentHeading]);
+
   useEffect(() => {
     if (useGooglePreview) {
       return;
@@ -409,10 +427,13 @@ export const MapView = React.memo(function MapView() {
             bearing: 0
           }}
           mapStyle={mapStyle}
+          dragPan={true}
+          touchZoom={true}
+          touchPitch={true}
           onDrag={handleMapInteraction}
           onWheel={handleMapInteraction}
           onLoad={() => setIsMapLoaded(true)}
-          style={{ width: '100%', height: '100%' }}
+          style={{ width: '100%', height: '100%', touchAction: 'none' }}
         >
           {currentPos && (
             <Marker longitude={currentPos[1]} latitude={currentPos[0]}>
@@ -756,12 +777,14 @@ export const MapView = React.memo(function MapView() {
           size="lg" 
           className={cn(
             perspectiveButtonClass,
-            "backdrop-blur-sm border border-white/10 shadow-lg transition-all", 
+            "backdrop-blur-sm border border-white/10 shadow-lg transition-all active:scale-95", 
             mapPerspective === 'top-down'
               ? "bg-primary text-white"
-              : "bg-zinc-950/90 text-muted-foreground"
+              : "bg-zinc-950/90 text-muted-foreground hover:bg-zinc-900"
           )} 
           onClick={() => setMapPerspective('top-down')}
+          aria-label="Switch to top-down perspective"
+          title="Top-down perspective"
         >
           <Globe className={actionIconClass} />
         </Button>
@@ -770,12 +793,14 @@ export const MapView = React.memo(function MapView() {
           size="lg" 
           className={cn(
             perspectiveButtonClass,
-            "backdrop-blur-sm border border-white/10 shadow-lg transition-all", 
+            "backdrop-blur-sm border border-white/10 shadow-lg transition-all active:scale-95", 
             mapPerspective === 'driving'
               ? "bg-primary text-white"
-              : "bg-zinc-950/90 text-muted-foreground"
+              : "bg-zinc-950/90 text-muted-foreground hover:bg-zinc-900"
           )} 
           onClick={() => setMapPerspective('driving')}
+          aria-label="Switch to driving perspective"
+          title="Driving perspective"
         >
           <Navigation className={actionIconClass} />
         </Button>
@@ -784,8 +809,10 @@ export const MapView = React.memo(function MapView() {
           size="lg" 
           className={cn(
             perspectiveButtonClass,
-            "backdrop-blur-sm border border-white/10 shadow-lg transition-all", 
-            isFollowing ? "bg-primary" : "bg-zinc-950/90"
+            "backdrop-blur-sm border border-white/10 shadow-lg transition-all active:scale-95", 
+            isFollowing
+              ? "bg-primary text-white"
+              : "bg-zinc-950/90 text-muted-foreground hover:bg-zinc-900"
           )} 
           onClick={() => {
             setFollowing(true);
@@ -793,6 +820,8 @@ export const MapView = React.memo(function MapView() {
               setGoogleMapCenter(currentPos);
             }
           }}
+          aria-label="Enable following"
+          title="Follow current location"
         >
           <Compass className={cn(actionIconClass, isFollowing && "animate-pulse")} />
         </Button>
